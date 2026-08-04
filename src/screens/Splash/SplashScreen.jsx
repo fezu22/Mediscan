@@ -108,7 +108,7 @@ export default function SplashScreen() {
             speed={1.3}
             style={styles.lottie}
           />
-          <BouncingIcon />
+          {/* <BouncingIcon /> */}
         </View>
 
         <View style={styles.titleRow}>

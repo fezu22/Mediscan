@@ -1,12 +1,20 @@
 import React, { useCallback, useState } from 'react';
-import { Text, View, Pressable, ScrollView, RefreshControl, StyleSheet } from 'react-native';
+import {
+  Text,
+  View,
+  Pressable,
+  ScrollView,
+  RefreshControl,
+  StyleSheet,
+} from 'react-native';
 import { ScanLine, Lightbulb, Clock, ChevronRight, User2 } from 'lucide-react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import ScreenContainer from '@/components/ScreenContainer';
 import Card from '@/components/Card';
 import DisclaimerBanner from '@/components/DisclaimerBanner';
 import { useLanguage } from '@/context/LanguageContext';
 import { useAuth } from '@/context/AuthContext';
+import { getRecentScans } from '@/lib/scanStorage';
 import { colors } from '@/theme/colors';
 
 const DAILY_FREE_LIMIT = 5;
@@ -16,27 +24,57 @@ export default function HomeScreen() {
   const { t } = useLanguage();
   const { user } = useAuth();
   const [refreshing, setRefreshing] = useState(false);
+  const [recentScans, setRecentScans] = useState([]);
 
-  // Phase 1 stub values — will be wired to SQLite/AsyncStorage scan counters
-  // and cloud-synced history in later steps.
-  const scansUsedToday = 2;
+  const scansUsedToday = recentScans.filter((s) => {
+    const d = new Date(s.createdAt);
+    const now = new Date();
+    return (
+      d.getFullYear() === now.getFullYear() &&
+      d.getMonth() === now.getMonth() &&
+      d.getDate() === now.getDate()
+    );
+  }).length;
+
   const scansLeft = Math.max(DAILY_FREE_LIMIT - scansUsedToday, 0);
-  const recentScan = null;
-
   const tips = [t.home.tip1, t.home.tip2, t.home.tip3];
 
-  const onRefresh = useCallback(() => {
-    setRefreshing(true);
-    // Placeholder: real refresh will re-pull latest scan + sync cloud history.
-    setTimeout(() => setRefreshing(false), 900);
+  const loadRecent = useCallback(async () => {
+    const list = await getRecentScans(3);
+    setRecentScans(list);
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadRecent();
+    }, [loadRecent]),
+  );
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadRecent();
+    setRefreshing(false);
+  }, [loadRecent]);
+
+  const openScan = (scan) => {
+    navigation.navigate('Result', {
+      imageUri: scan.imageUri,
+      savedScan: scan,
+    });
+  };
 
   return (
     <ScreenContainer edges={['top']}>
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.primary}
+          />
+        }
       >
         {/* Header */}
         <View style={styles.headerRow}>
@@ -44,7 +82,10 @@ export default function HomeScreen() {
             <Text style={styles.greetingText}>{t.home.greeting},</Text>
             <Text style={styles.userName}>{user?.name ?? 'there'}</Text>
           </View>
-          <Pressable style={styles.avatarButton}>
+          <Pressable
+            style={styles.avatarButton}
+            onPress={() => navigation.navigate('Profile')}
+          >
             <User2 size={20} color={colors.primary} />
           </Pressable>
         </View>
@@ -89,41 +130,58 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* Recent Scan */}
+        {/* Recent Scans */}
         <View style={styles.section}>
           <View style={styles.sectionHeaderRow}>
             <Text style={styles.sectionTitle}>{t.home.recentScan}</Text>
-            {recentScan && (
-              <Pressable style={styles.viewAllButton}>
+            {recentScans.length > 0 && (
+              <Pressable
+                style={styles.viewAllButton}
+                onPress={() => navigation.navigate('History')}
+              >
                 <Text style={styles.viewAllText}>{t.home.viewAll}</Text>
                 <ChevronRight size={14} color={colors.primary} />
               </Pressable>
             )}
           </View>
 
-          {recentScan ? (
-            <Card style={styles.recentCard}>
-              <View style={styles.recentIconContainer}>
-                <Clock size={20} color={colors.primary} />
-              </View>
-              <View style={styles.recentDetails}>
-                <Text style={styles.recentTitle}>{recentScan.title}</Text>
-                <Text style={styles.recentDate}>{recentScan.date}</Text>
-              </View>
-              <ChevronRight size={18} color={colors.textMuted} />
-            </Card>
-          ) : (
+          {recentScans.length === 0 ? (
             <Card style={styles.emptyStateCard}>
               <View style={styles.recentIconContainer}>
                 <Clock size={20} color={colors.primary} />
               </View>
               <Text style={styles.recentTitle}>{t.home.noRecentScan}</Text>
-              <Text style={styles.emptyStateSubtitle}>{t.home.noRecentScanSubtitle}</Text>
+              <Text style={styles.emptyStateSubtitle}>
+                {t.home.noRecentScanSubtitle}
+              </Text>
             </Card>
+          ) : (
+            recentScans.map((scan) => (
+              <Pressable key={scan.id} onPress={() => openScan(scan)}>
+                <Card style={[styles.recentCard, { marginBottom: 10 }]}>
+                  <View style={styles.recentIconContainer}>
+                    <Clock size={20} color={colors.primary} />
+                  </View>
+                  <View style={styles.recentDetails}>
+                    <Text style={styles.recentTitle} numberOfLines={1}>
+                      {scan.name}
+                    </Text>
+                    <Text style={styles.recentDate}>
+                      {new Date(scan.createdAt).toLocaleString(undefined, {
+                        day: 'numeric',
+                        month: 'short',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </Text>
+                  </View>
+                  <ChevronRight size={18} color={colors.textMuted} />
+                </Card>
+              </Pressable>
+            ))
           )}
         </View>
 
-        {/* Disclaimer */}
         <View style={styles.disclaimerWrapper}>
           <DisclaimerBanner />
         </View>
@@ -133,19 +191,14 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  scrollContent: {
-    paddingBottom: 32,
-  },
+  scrollContent: { paddingBottom: 32 },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginTop: 8,
   },
-  greetingText: {
-    color: colors.textMuted,
-    fontSize: 14,
-  },
+  greetingText: { color: colors.textMuted, fontSize: 14 },
   userName: {
     color: colors.textDark,
     fontSize: 20,
@@ -177,11 +230,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 12,
   },
-  scanTitle: {
-    color: colors.white,
-    fontSize: 18,
-    fontWeight: '700',
-  },
+  scanTitle: { color: colors.white, fontSize: 18, fontWeight: '700' },
   scanSubtitle: {
     color: 'rgba(255,255,255,0.85)',
     fontSize: 12,
@@ -193,9 +242,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 12,
   },
-  section: {
-    marginTop: 28,
-  },
+  section: { marginTop: 28 },
   sectionHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -207,9 +254,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
   },
-  quickTipsList: {
-    gap: 12,
-  },
+  quickTipsList: { gap: 12 },
   quickTipCard: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -232,11 +277,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     paddingTop: 6,
   },
-  viewAllButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
+  viewAllButton: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   viewAllText: {
     color: colors.primary,
     fontSize: 12,
@@ -249,10 +290,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 14,
   },
-  emptyStateCard: {
-    alignItems: 'center',
-    paddingVertical: 32,
-  },
+  emptyStateCard: { alignItems: 'center', paddingVertical: 32 },
   recentIconContainer: {
     width: 48,
     height: 48,
@@ -261,9 +299,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  recentDetails: {
-    flex: 1,
-  },
+  recentDetails: { flex: 1 },
   recentTitle: {
     color: colors.textDark,
     fontSize: 14,
@@ -281,7 +317,5 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingHorizontal: 24,
   },
-  disclaimerWrapper: {
-    marginTop: 28,
-  },
+  disclaimerWrapper: { marginTop: 28 },
 });

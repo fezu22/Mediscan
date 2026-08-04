@@ -15,7 +15,7 @@ let isGoogleConfigured = false;
 let lastGoogleConfigWarning = '';
 
 function configureGoogleSignIn() {
-  if (!GoogleSignin || isGoogleConfigured) return;
+  if (!GoogleSignin || isGoogleConfigured) return true;
 
   const webClientId = ENV.GOOGLE_WEB_CLIENT_ID;
   if (!webClientId || webClientId.includes('YOUR_')) {
@@ -24,18 +24,36 @@ function configureGoogleSignIn() {
       console.warn('[MedScan] GOOGLE_WEB_CLIENT_ID missing in env config');
       lastGoogleConfigWarning = warningKey;
     }
-    return;
+    return false;
   }
 
   try {
     GoogleSignin.configure({
       webClientId,
       offlineAccess: true,
+      scopes: ['profile', 'email'],
     });
     isGoogleConfigured = true;
+    return true;
   } catch (e) {
     console.warn('[MedScan] GoogleSignin.configure failed', e);
+    return false;
   }
+}
+
+function getGoogleSignInErrorMessage(error) {
+  const code = error?.code || '';
+  const message = error?.message || '';
+
+  if (code === 'DEVELOPER_ERROR' || message.includes('DEVELOPER_ERROR')) {
+    return 'Google Sign-In is misconfigured. Check your Google Cloud OAuth client, package name (com.medscan), SHA-1 fingerprint, and Android signing setup.';
+  }
+
+  if (message.includes('10:') || message.includes('12500')) {
+    return 'Google Play services or the Google account setup is not valid on this device.';
+  }
+
+  return message || 'Google sign-in failed.';
 }
 
 export function AuthProvider({ children }) {
@@ -82,7 +100,11 @@ export function AuthProvider({ children }) {
       throw new Error('Google Sign-In package not installed');
     }
 
-    configureGoogleSignIn();
+    const configured = configureGoogleSignIn();
+
+    if (!configured) {
+      throw new Error('Google Sign-In setup failed. Check the Google configuration and environment values.');
+    }
 
     if (!ENV.GOOGLE_WEB_CLIENT_ID || ENV.GOOGLE_WEB_CLIENT_ID.includes('YOUR_')) {
       throw new Error('GOOGLE_WEB_CLIENT_ID missing in env config');
@@ -111,8 +133,11 @@ export function AuthProvider({ children }) {
       ) {
         return { success: false, cancelled: true };
       }
+      const friendlyMessage = getGoogleSignInErrorMessage(error);
       console.error('Google sign-in error:', error);
-      throw error;
+      const wrappedError = new Error(friendlyMessage);
+      wrappedError.originalError = error;
+      throw wrappedError;
     }
   };
 
