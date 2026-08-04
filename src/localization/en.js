@@ -1,0 +1,48 @@
+export default {
+  common: {
+    continue: 'Continue',
+    cancel: 'Cancel',
+    skip: 'Skip',
+    retry: 'Retry',
+    loading: 'Loading…',
+    consultDoctor: 'This is not a medical diagnosis. Always consult a licensed doctor or pharmacist before making health decisions.',
+  },
+  splash: {
+    tagline: 'Understand your medicines & reports instantly',
+  },
+  languageSelect: {
+    title: 'Choose your language',
+    subtitle: 'You can change this anytime from your profile.',
+    english: 'English',
+    urdu: 'اردو',
+  },
+  auth: {
+    title: 'Welcome to MedScan',
+    subtitle: 'Scan medicines and lab reports to get clear, simple explanations.',
+    phone: 'Continue with Phone',
+    google: 'Continue with Google',
+    email: 'Continue with Email',
+    terms: 'By continuing, you agree to our Terms of Service and Privacy Policy.',
+  },
+  home: {
+    greeting: 'Hello',
+    scanCta: 'Scan Now',
+    scanSubtitle: 'Medicine or Lab Report',
+    quickTips: 'Quick Tips',
+    recentScan: 'Recent Scan',
+    viewAll: 'View all',
+    noRecentScan: 'No scans yet',
+    noRecentScanSubtitle: 'Your most recent scan will appear here.',
+    scansLeft: 'scans left today',
+    upgrade: 'Premium coming soon',
+    tip1: 'Keep the label flat and well-lit for the clearest scan.',
+    tip2: 'For reports, scan one page at a time in order.',
+    tip3: 'MedScan explains reports — it never replaces your doctor.',
+  },
+  tabs: {
+    home: 'Home',
+    scan: 'Scan',
+    history: 'History',
+    profile: 'Profile',
+  },
+};

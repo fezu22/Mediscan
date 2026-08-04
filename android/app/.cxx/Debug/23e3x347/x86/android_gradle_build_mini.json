@@ -1,0 +1,43 @@
+{
+  "buildFiles": [
+    "D:\\work\\Apps\\Medi\\node_modules\\react-native-safe-area-context\\android\\src\\main\\jni\\CMakeLists.txt",
+    "D:\\work\\Apps\\Medi\\node_modules\\react-native\\ReactAndroid\\cmake-utils\\default-app-setup\\CMakeLists.txt"
+  ],
+  "cleanCommandsComponents": [
+    [
+      "C:\\Users\\faraz\\AppData\\Local\\Android\\Sdk\\cmake\\3.22.1\\bin\\ninja.exe",
+      "-C",
+      "D:\\work\\Apps\\Medi\\android\\app\\.cxx\\Debug\\23e3x347\\x86",
+      "clean"
+    ]
+  ],
+  "buildTargetsCommandComponents": [
+    "C:\\Users\\faraz\\AppData\\Local\\Android\\Sdk\\cmake\\3.22.1\\bin\\ninja.exe",
+    "-C",
+    "D:\\work\\Apps\\Medi\\android\\app\\.cxx\\Debug\\23e3x347\\x86",
+    "{LIST_OF_TARGETS_TO_BUILD}"
+  ],
+  "libraries": {
+    "react_codegen_safeareacontext::@7984cd80db47aa7b952a": {
+      "artifactName": "react_codegen_safeareacontext",
+      "abi": "x86",
+      "output": "D:\\work\\Apps\\Medi\\android\\app\\build\\intermediates\\cxx\\Debug\\23e3x347\\obj\\x86\\libreact_codegen_safeareacontext.so",
+      "runtimeFiles": [
+        "D:\\.gradle\\caches\\9.3.1\\transforms\\f3bb8c0980a8632bf0fb9e09ca917a5e\\workspace\\transformed\\fbjni-0.7.0\\prefab\\modules\\fbjni\\libs\\android.x86\\libfbjni.so",
+        "D:\\.gradle\\caches\\9.3.1\\transforms\\9f31b5b7d16446b33f88a4da01431520\\workspace\\transformed\\react-android-0.86.2-debug\\prefab\\modules\\jsi\\libs\\android.x86\\libjsi.so",
+        "D:\\.gradle\\caches\\9.3.1\\transforms\\9f31b5b7d16446b33f88a4da01431520\\workspace\\transformed\\react-android-0.86.2-debug\\prefab\\modules\\reactnative\\libs\\android.x86\\libreactnative.so"
+      ]
+    },
+    "appmodules::@6890427a1f51a3e7e1df": {
+      "artifactName": "appmodules",
+      "abi": "x86",
+      "output": "D:\\work\\Apps\\Medi\\android\\app\\build\\intermediates\\cxx\\Debug\\23e3x347\\obj\\x86\\libappmodules.so",
+      "runtimeFiles": [
+        "D:\\work\\Apps\\Medi\\android\\app\\build\\intermediates\\cxx\\Debug\\23e3x347\\obj\\x86\\libreact_codegen_safeareacontext.so",
+        "D:\\.gradle\\caches\\9.3.1\\transforms\\f3bb8c0980a8632bf0fb9e09ca917a5e\\workspace\\transformed\\fbjni-0.7.0\\prefab\\modules\\fbjni\\libs\\android.x86\\libfbjni.so",
+        "D:\\.gradle\\caches\\9.3.1\\transforms\\9f31b5b7d16446b33f88a4da01431520\\workspace\\transformed\\react-android-0.86.2-debug\\prefab\\modules\\jsi\\libs\\android.x86\\libjsi.so",
+        "D:\\.gradle\\caches\\9.3.1\\transforms\\9f31b5b7d16446b33f88a4da01431520\\workspace\\transformed\\react-android-0.86.2-debug\\prefab\\modules\\reactnative\\libs\\android.x86\\libreactnative.so"
+      ]
+    }
+  }
+}

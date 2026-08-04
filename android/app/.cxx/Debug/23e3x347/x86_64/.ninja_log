@@ -1,0 +1,19 @@
+# ninja log v5
+2	74	0	D:/work/Apps/Medi/android/app/.cxx/Debug/23e3x347/x86_64/CMakeFiles/cmake.verify_globs	63c07ba3fa412b5f
+44195	59835	8074689114410907	safeareacontext_autolinked_build/CMakeFiles/react_codegen_safeareacontext.dir/ed813074d3de2cdbfc18b5a13591ad91/source/codegen/jni/react/renderer/components/safeareacontext/States.cpp.o	34d6e194bd8ba126
+24070	50178	8074689017723455	safeareacontext_autolinked_build/CMakeFiles/react_codegen_safeareacontext.dir/ed813074d3de2cdbfc18b5a13591ad91/source/codegen/jni/react/renderer/components/safeareacontext/EventEmitters.cpp.o	a471942acad809d2
+77	34299	8074688858785600	safeareacontext_autolinked_build/CMakeFiles/react_codegen_safeareacontext.dir/389da09c70d427c075dce2d21a0849ca/common/cpp/react/renderer/components/safeareacontext/RNCSafeAreaViewState.cpp.o	aa81ff436ffca4c8
+156	44193	8074688955732477	safeareacontext_autolinked_build/CMakeFiles/react_codegen_safeareacontext.dir/ea9565d56fac505a96c6b4b0f9f29788/codegen/jni/react/renderer/components/safeareacontext/ComponentDescriptors.cpp.o	45c5415f85b2306d
+139	24068	8074688756298550	safeareacontext_autolinked_build/CMakeFiles/react_codegen_safeareacontext.dir/389da09c70d427c075dce2d21a0849ca/android/build/generated/source/codegen/jni/safeareacontext-generated.cpp.o	ef5162f13222ba93
+66221	66662	8074689183400359	D:/work/Apps/Medi/android/app/build/intermediates/cxx/Debug/23e3x347/obj/x86_64/libreact_codegen_safeareacontext.so	e60466a58b0a06d9
+34301	66220	8074689178621687	safeareacontext_autolinked_build/CMakeFiles/react_codegen_safeareacontext.dir/ed813074d3de2cdbfc18b5a13591ad91/source/codegen/jni/react/renderer/components/safeareacontext/Props.cpp.o	37fb57dd13bf9e40
+119	51761	8074689033461769	safeareacontext_autolinked_build/CMakeFiles/react_codegen_safeareacontext.dir/167ac0980ecfe33560496c8f27f72afa/cpp/react/renderer/components/safeareacontext/RNCSafeAreaViewShadowNode.cpp.o	b5532ea2dba66b43
+66662	67017	8074689187071498	D:/work/Apps/Medi/android/app/build/intermediates/cxx/Debug/23e3x347/obj/x86_64/libappmodules.so	b1eef3a1f3d74a91
+29795	63683	8074689153110855	safeareacontext_autolinked_build/CMakeFiles/react_codegen_safeareacontext.dir/ed813074d3de2cdbfc18b5a13591ad91/source/codegen/jni/react/renderer/components/safeareacontext/ShadowNodes.cpp.o	df83d5580d887cba
+100	29795	8074688812812984	CMakeFiles/appmodules.dir/OnLoad.cpp.o	34f2d0348dc723f0
+48	51152	8074689026992144	CMakeFiles/appmodules.dir/D_/work/Apps/Medi/android/app/build/generated/autolinking/src/main/jni/autolinking.cpp.o	5735af4f8b7ea63b
+244	3422	8074702036813297	build.ninja	ba7cfed3953912f4
+8	169	0	D:/work/Apps/Medi/android/app/.cxx/Debug/23e3x347/x86_64/CMakeFiles/cmake.verify_globs	63c07ba3fa412b5f
+8	122	0	D:/work/Apps/Medi/android/app/.cxx/Debug/23e3x347/x86_64/CMakeFiles/cmake.verify_globs	63c07ba3fa412b5f
+2	57	0	D:/work/Apps/Medi/android/app/.cxx/Debug/23e3x347/x86_64/CMakeFiles/cmake.verify_globs	63c07ba3fa412b5f
+3	103	0	D:/work/Apps/Medi/android/app/.cxx/Debug/23e3x347/x86_64/CMakeFiles/cmake.verify_globs	63c07ba3fa412b5f
