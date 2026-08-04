@@ -1,4 +1,0 @@
-D:/work/Apps/Medi/android/app/.cxx/Debug/23e3x347/x86/CMakeFiles/_CMakeLTOTest-CXX/bin/CMakeFiles/foo.dir
-D:/work/Apps/Medi/android/app/.cxx/Debug/23e3x347/x86/CMakeFiles/_CMakeLTOTest-CXX/bin/CMakeFiles/boo.dir
-D:/work/Apps/Medi/android/app/.cxx/Debug/23e3x347/x86/CMakeFiles/_CMakeLTOTest-CXX/bin/CMakeFiles/edit_cache.dir
-D:/work/Apps/Medi/android/app/.cxx/Debug/23e3x347/x86/CMakeFiles/_CMakeLTOTest-CXX/bin/CMakeFiles/rebuild_cache.dir
