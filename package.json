@@ -32,7 +32,8 @@
     "react-native-svg": "15.6.0",
     "react-native-tts": "^4.1.1",
     "react-native-url-polyfill": "^2.0.0",
-    "react-native-view-shot": "^3.8.0"
+    "react-native-view-shot": "^3.8.0",
+    "react-native-vision-camera": "^4.6.4"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
