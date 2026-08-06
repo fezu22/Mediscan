@@ -6,6 +6,7 @@ import {
   Platform,
   PermissionsAndroid,
   ActivityIndicator,
+  NativeModules,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import Voice from '@react-native-voice/voice';
@@ -17,50 +18,90 @@ const GEMINI_MODEL = 'gemini-3.1-flash-lite';
 const RULES = `
 You are MedScan voice assistant for medicines and lab reports only.
 Rules:
-- Only medical topics. Non-medical: short refuse.
+- Only medical topics. Non-medical: short refuse in the user's language.
 - Never invent dosage not on package. Never diagnose.
 - Do not say you are AI. No asterisks.
 - Keep answers SHORT for voice (2-4 short sentences).
-- If user speaks Urdu / Roman Urdu, reply in simple Urdu (Urdu script preferred).
-- If user speaks English, reply in simple English.
-- Avoid complex English medical jargon when replying in Urdu.
+- ALWAYS reply in the SAME language the user used.
+  Support: Urdu, Pashto, English, Hindi, Arabic, and other common languages.
+- If user mixes Roman Urdu / Roman Pashto, reply clearly in a language they understand.
+- Avoid complex medical jargon.
 `;
 
-/** Prefer Urdu, then Hindi (often better on Android), then English */
-async function pickTtsLanguage() {
+function getDeviceLocale() {
+  try {
+    const loc =
+      Platform.OS === 'android'
+        ? NativeModules.I18nManager?.localeIdentifier ||
+          NativeModules.I18nManager?.locale ||
+          ''
+        : NativeModules.SettingsManager?.settings?.AppleLocale ||
+          NativeModules.SettingsManager?.settings?.AppleLanguages?.[0] ||
+          '';
+    return String(loc || '').replace('_', '-');
+  } catch {
+    return '';
+  }
+}
+
+function getListenLocaleChain() {
+  const device = getDeviceLocale();
+  const chain = [];
+  if (device) chain.push(device);
+  ['ps-AF', 'ps-PK', 'ur-PK', 'ur-IN', 'hi-IN', 'en-US', 'ar-SA', 'en-GB'].forEach(
+    (l) => {
+      if (!chain.includes(l)) chain.push(l);
+    },
+  );
+  return chain;
+}
+
+async function pickTtsLanguage(prefer) {
   try {
     const voices = await Tts.voices();
     const list = Array.isArray(voices) ? voices : [];
-
     const find = (prefix) =>
       list.find(
         (v) =>
           typeof v?.language === 'string' &&
-          v.language.toLowerCase().startsWith(prefix) &&
+          v.language.toLowerCase().startsWith(prefix.toLowerCase()) &&
           v.networkConnectionRequired !== true,
       );
 
-    const ur = find('ur');
-    if (ur?.language) return ur.language;
-
-    const hi = find('hi');
-    if (hi?.language) return hi.language;
-
-    const en = find('en');
-    if (en?.language) return en.language;
-
-    return 'ur-PK';
+    if (prefer) {
+      const hit = find(prefer);
+      if (hit?.language) return hit.language;
+    }
+    for (const p of ['ps', 'ur', 'hi', 'ar', 'en']) {
+      const hit = find(p);
+      if (hit?.language) return hit.language;
+    }
+    return 'en-US';
   } catch {
-    return 'ur-PK';
+    return 'en-US';
   }
 }
 
-function detectReplyLang(text) {
-  if (/[\u0600-\u06FF]/.test(text || '')) return 'ur';
+function detectLangHint(text) {
+  const t = text || '';
+  if (/[\u0600-\u06FF]/.test(t)) {
+    if (/[ټډړږښڅځڼېۍ]/.test(t)) return 'ps';
+    return 'ur';
+  }
+  const lower = t.toLowerCase();
+  if (
+    /\b(sta|staso|nokar|dwa|dre|shukria|manana|meherbani|pashto|pukhto)\b/.test(
+      lower,
+    )
+  ) {
+    return 'ps';
+  }
+  if (/\b(hai|hain|kya|nahi|mujhe|meri|kitna|dawai|bukhar)\b/.test(lower)) {
+    return 'ur';
+  }
   return 'en';
 }
 
-/** Stitch / DESIGN voice page — WebGL ring + UI */
 const VOICE_HTML = `<!DOCTYPE html>
 <html class="dark" lang="en">
 <head>
@@ -75,10 +116,7 @@ const VOICE_HTML = `<!DOCTYPE html>
     font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
     overflow: hidden;
   }
-  .wrap {
-    display: flex; flex-direction: column;
-    height: 100%; width: 100%; position: relative;
-  }
+  .wrap { display: flex; flex-direction: column; height: 100%; width: 100%; }
   .header {
     padding: 20px 16px 8px;
     display: flex; justify-content: space-between; align-items: flex-start;
@@ -101,7 +139,11 @@ const VOICE_HTML = `<!DOCTYPE html>
   #shader-canvas { width: 100%; height: 100%; display: block; }
   .status {
     margin-top: 12px; font-size: 16px; font-weight: 600;
-    color: rgba(255,255,255,0.75);
+    color: rgba(255,255,255,0.75); text-align: center;
+  }
+  .hint {
+    margin-top: 6px; font-size: 12px; color: rgba(255,255,255,0.45);
+    text-align: center; padding: 0 16px;
   }
   .bottom {
     padding: 12px 16px 28px;
@@ -140,7 +182,7 @@ const VOICE_HTML = `<!DOCTYPE html>
   <div class="header">
     <div>
       <h1 class="title">MedScan Voice</h1>
-      <p class="sub">Medicine / report sawal — voice mode</p>
+      <p class="sub">Urdu · Pashto · English — continuous talk</p>
     </div>
     <button class="close" id="btn-close" type="button">✕</button>
   </div>
@@ -149,11 +191,12 @@ const VOICE_HTML = `<!DOCTYPE html>
     <div class="ring-box">
       <canvas id="shader-canvas" width="512" height="512"></canvas>
     </div>
-    <div class="status" id="status-text">Tap to speak</div>
+    <div class="status" id="status-text">Tap once to start</div>
+    <div class="hint" id="hint-text">Bolo, chup ho jao — khud sun lega. Stop sirf band karne ke liye</div>
   </div>
 
   <div class="bottom">
-    <div class="glass" id="transcript-card">
+    <div class="glass">
       <div id="you-block" class="hidden">
         <div class="label">You</div>
         <p class="body" id="you-text"></p>
@@ -165,7 +208,7 @@ const VOICE_HTML = `<!DOCTYPE html>
       </div>
       <div class="err" id="err-text"></div>
     </div>
-    <button class="btn" id="btn-main" type="button">🎤  Tap to speak</button>
+    <button class="btn" id="btn-main" type="button">🎤  Tap once to talk</button>
   </div>
 </div>
 
@@ -175,20 +218,31 @@ const VOICE_HTML = `<!DOCTYPE html>
 
   window.setVoiceState = function(s) {
     window.__voiceState = s;
-    var map = {0:'Tap to speak',1:'Listening...',2:'Thinking...',3:'Speaking...'};
+    var map = {
+      0: 'Tap once to start',
+      1: 'Listening... speak then pause',
+      2: 'Thinking...',
+      3: 'Speaking...'
+    };
     var el = document.getElementById('status-text');
     if (el) el.textContent = map[s] || map[0];
+    var hint = document.getElementById('hint-text');
+    if (hint) {
+      hint.textContent = (s === 0)
+        ? 'Bolo, chup ho jao — khud sun lega. Stop sirf band karne ke liye'
+        : 'Stop dabao jab poori baat khatam karni ho';
+    }
     var btn = document.getElementById('btn-main');
     if (!btn) return;
     btn.classList.remove('stop','thinking');
     if (s === 1 || s === 3) {
       btn.classList.add('stop');
-      btn.textContent = s === 1 ? '⏹️  Stop' : '⏹️  Stop speaking';
+      btn.textContent = '⏹️  Stop conversation';
     } else if (s === 2) {
       btn.classList.add('thinking');
       btn.textContent = 'Thinking...';
     } else {
-      btn.textContent = '🎤  Tap to speak';
+      btn.textContent = '🎤  Tap once to talk';
     }
   };
 
@@ -305,8 +359,15 @@ export default function VoiceBotModal({ visible, onClose, scanContext }) {
   const [transcript, setTranscript] = useState('');
   const [reply, setReply] = useState('');
   const [error, setError] = useState('');
+
   const cancelled = useRef(false);
   const statusRef = useRef('idle');
+  const continuousRef = useRef(false);
+  const lastLangRef = useRef('en');
+  const partialRef = useRef('');
+  const finalRef = useRef('');
+  const silenceTimerRef = useRef(null);
+  const processingRef = useRef(false);
 
   const inject = (js) => {
     webRef.current?.injectJavaScript(`${js}; true;`);
@@ -315,13 +376,21 @@ export default function VoiceBotModal({ visible, onClose, scanContext }) {
   const syncUI = (st, you, bot, err) => {
     const map = { idle: 0, listening: 1, thinking: 2, speaking: 3 };
     const n = map[st] ?? 0;
-    const y = JSON.stringify(you || '');
-    const b = JSON.stringify(bot || '');
-    const e = JSON.stringify(err || '');
     inject(`
       if (window.setVoiceState) window.setVoiceState(${n});
-      if (window.setTranscript) window.setTranscript(${y}, ${b}, ${e});
+      if (window.setTranscript) window.setTranscript(
+        ${JSON.stringify(you || '')},
+        ${JSON.stringify(bot || '')},
+        ${JSON.stringify(err || '')}
+      );
     `);
+  };
+
+  const clearSilenceTimer = () => {
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
+    }
   };
 
   useEffect(() => {
@@ -329,109 +398,86 @@ export default function VoiceBotModal({ visible, onClose, scanContext }) {
     syncUI(status, transcript, reply, error);
   }, [status, transcript, reply, error]);
 
-  useEffect(() => {
-    if (!visible) return;
-    cancelled.current = false;
-    setStatus('idle');
-    setTranscript('');
-    setReply('');
-    setError('');
+  const finishUtterance = async () => {
+    if (processingRef.current || cancelled.current) return;
 
-    Voice.onSpeechStart = () => setStatus('listening');
-    Voice.onSpeechEnd = () => {};
-    Voice.onSpeechError = () => {
-      if (!cancelled.current) {
-        setStatus('idle');
-        setError('Sun nahi saka. Mic dubara dabao.');
+    const text = (finalRef.current || partialRef.current || '').trim();
+    if (!text) {
+      if (continuousRef.current) {
+        setTimeout(() => startListenInternal(), 400);
       }
-    };
-    Voice.onSpeechResults = async (e) => {
-      const text = e?.value?.[0];
-      if (!text || cancelled.current) return;
-      setTranscript(text);
-      await Voice.stop().catch(() => {});
-      askGemini(text);
-    };
-
-    (async () => {
-      try {
-        const lang = await pickTtsLanguage();
-        await Tts.setDefaultLanguage(lang);
-        await Tts.setDefaultRate(0.45);
-        try {
-          await Tts.setDefaultPitch(1.0);
-        } catch (_) {}
-      } catch (e) {
-        console.log('TTS lang setup', e);
-        try {
-          await Tts.setDefaultLanguage('hi-IN');
-        } catch (_) {
-          try {
-            await Tts.setDefaultLanguage('en-US');
-          } catch (__) {}
-        }
-      }
-    })();
-
-    const onStart = () => setStatus('speaking');
-    const onEnd = () => {
-      if (!cancelled.current) setStatus('idle');
-    };
-    Tts.addEventListener('tts-start', onStart);
-    Tts.addEventListener('tts-finish', onEnd);
-    Tts.addEventListener('tts-cancel', onEnd);
-
-    return () => {
-      cancelled.current = true;
-      Voice.destroy().then(Voice.removeAllListeners).catch(() => {});
-      Tts.stop();
-      Tts.removeAllListeners('tts-start');
-      Tts.removeAllListeners('tts-finish');
-      Tts.removeAllListeners('tts-cancel');
-    };
-  }, [visible]);
-
-  const ensureMic = async () => {
-    if (Platform.OS !== 'android') return true;
-    const g = await PermissionsAndroid.request(
-      PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
-    );
-    return g === PermissionsAndroid.RESULTS.GRANTED;
-  };
-
-  const startListen = async () => {
-    setError('');
-    setTranscript('');
-    setReply('');
-    try {
-      await Tts.stop();
-      const ok = await ensureMic();
-      if (!ok) {
-        setError('Mic permission allow karein.');
-        return;
-      }
-      setStatus('listening');
-
-      try {
-        await Voice.start('ur-PK');
-      } catch (e1) {
-        try {
-          await Voice.start('ur-IN');
-        } catch (e2) {
-          await Voice.start('en-US');
-        }
-      }
-    } catch (e) {
-      setStatus('idle');
-      setError('Mic start nahi hua. Language pack check karein.');
+      return;
     }
-  };
 
-  const stopListen = async () => {
+    processingRef.current = true;
+    clearSilenceTimer();
     try {
       await Voice.stop();
     } catch (_) {}
-    setStatus('idle');
+
+    setTranscript(text);
+    lastLangRef.current = detectLangHint(text);
+    partialRef.current = '';
+    finalRef.current = '';
+
+    await askGemini(text);
+    processingRef.current = false;
+  };
+
+  const scheduleSilenceEnd = () => {
+    // Grok-style: pause ~1.2s after speech → auto process (no Stop needed)
+    clearSilenceTimer();
+    silenceTimerRef.current = setTimeout(() => {
+      if (statusRef.current === 'listening' && continuousRef.current) {
+        finishUtterance();
+      }
+    }, 1200);
+  };
+
+  const startListenInternal = async () => {
+    if (cancelled.current || !continuousRef.current) return;
+    if (processingRef.current) return;
+
+    try {
+      await Tts.stop();
+      clearSilenceTimer();
+      partialRef.current = '';
+      finalRef.current = '';
+      setStatus('listening');
+      setError('');
+
+      const chain = getListenLocaleChain();
+      let started = false;
+
+      for (const locale of chain) {
+        try {
+          await Voice.start(locale, {
+            EXTRA_PARTIAL_RESULTS: true,
+            REQUEST_PERMISSIONS_AUTO: true,
+            EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS: 1200,
+            EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS: 900,
+            EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS: 400,
+          });
+          started = true;
+          break;
+        } catch (_) {
+          try {
+            await Voice.start(locale);
+            started = true;
+            break;
+          } catch (__) {}
+        }
+      }
+
+      if (!started) {
+        await Voice.start('en-US');
+      }
+    } catch (e) {
+      console.log('listen error', e);
+      setStatus('idle');
+      continuousRef.current = false;
+      setError('Mic start nahi hua.');
+    }
   };
 
   const askGemini = async (question) => {
@@ -444,7 +490,8 @@ ${scanContext || 'No scan context'}
 
 User said: ${question}
 
-Reply short for speaking aloud.
+Detected language hint: ${lastLangRef.current}
+Reply in the user's language. Short for voice.
 `;
 
       const response = await fetch(
@@ -468,36 +515,176 @@ Reply short for speaking aloud.
       setReply(clean);
       setStatus('speaking');
 
+      const hint = detectLangHint(clean) || lastLangRef.current;
+      lastLangRef.current = hint;
+
       try {
-        const langHint = detectReplyLang(clean);
-        if (langHint === 'ur') {
+        if (hint === 'ps' || hint === 'ur') {
           try {
-            await Tts.setDefaultLanguage('ur-PK');
+            await Tts.setDefaultLanguage(await pickTtsLanguage(hint));
           } catch (_) {
             try {
-              await Tts.setDefaultLanguage('hi-IN');
+              await Tts.setDefaultLanguage('ur-PK');
             } catch (__) {
-              await Tts.setDefaultLanguage('en-US');
+              try {
+                await Tts.setDefaultLanguage('hi-IN');
+              } catch (___) {
+                await Tts.setDefaultLanguage('en-US');
+              }
             }
           }
         } else {
-          try {
-            await Tts.setDefaultLanguage('en-US');
-          } catch (_) {}
+          await Tts.setDefaultLanguage(await pickTtsLanguage('en'));
         }
       } catch (_) {}
 
       setTimeout(() => {
-        Tts.speak(clean);
-      }, 200);
+        if (!cancelled.current) Tts.speak(clean);
+      }, 250);
     } catch (e) {
-      setError('Network error. Dobara try karein.');
-      setStatus('idle');
+      setError('Network error.');
+      processingRef.current = false;
+      if (continuousRef.current) {
+        setTimeout(() => startListenInternal(), 800);
+      } else {
+        setStatus('idle');
+      }
     }
+  };
+
+  useEffect(() => {
+    if (!visible) return;
+
+    cancelled.current = false;
+    continuousRef.current = false;
+    processingRef.current = false;
+    setStatus('idle');
+    setTranscript('');
+    setReply('');
+    setError('');
+
+    Voice.onSpeechStart = () => {
+      setStatus('listening');
+      clearSilenceTimer();
+    };
+
+    Voice.onSpeechPartialResults = (e) => {
+      const t = e?.value?.[0];
+      if (t) {
+        partialRef.current = t;
+        setTranscript(t);
+        scheduleSilenceEnd();
+      }
+    };
+
+    Voice.onSpeechResults = (e) => {
+      const t = e?.value?.[0];
+      if (t) {
+        finalRef.current = t;
+        setTranscript(t);
+        scheduleSilenceEnd();
+      }
+    };
+
+    Voice.onSpeechEnd = () => {
+      clearSilenceTimer();
+      setTimeout(() => finishUtterance(), 200);
+    };
+
+    Voice.onSpeechError = (e) => {
+      console.log('Speech error', e);
+      if (cancelled.current || processingRef.current) return;
+      clearSilenceTimer();
+      if (continuousRef.current) {
+        setTimeout(() => {
+          if (continuousRef.current && !cancelled.current) {
+            startListenInternal();
+          }
+        }, 500);
+        return;
+      }
+      setStatus('idle');
+      setError('Sun nahi saka. Dobara try karein.');
+    };
+
+    (async () => {
+      try {
+        const lang = await pickTtsLanguage(lastLangRef.current);
+        await Tts.setDefaultLanguage(lang);
+        await Tts.setDefaultRate(0.45);
+      } catch (_) {}
+    })();
+
+    const onTtsStart = () => setStatus('speaking');
+    const onTtsEnd = () => {
+      if (cancelled.current) return;
+      // After bot speaks → auto listen again (no mic press)
+      if (continuousRef.current) {
+        setTimeout(() => {
+          if (continuousRef.current && !cancelled.current) {
+            startListenInternal();
+          }
+        }, 500);
+      } else {
+        setStatus('idle');
+      }
+    };
+
+    Tts.addEventListener('tts-start', onTtsStart);
+    Tts.addEventListener('tts-finish', onTtsEnd);
+    Tts.addEventListener('tts-cancel', onTtsEnd);
+
+    return () => {
+      cancelled.current = true;
+      continuousRef.current = false;
+      clearSilenceTimer();
+      Voice.destroy().then(Voice.removeAllListeners).catch(() => {});
+      Tts.stop();
+      Tts.removeAllListeners('tts-start');
+      Tts.removeAllListeners('tts-finish');
+      Tts.removeAllListeners('tts-cancel');
+    };
+  }, [visible]);
+
+  const ensureMic = async () => {
+    if (Platform.OS !== 'android') return true;
+    const g = await PermissionsAndroid.request(
+      PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+    );
+    return g === PermissionsAndroid.RESULTS.GRANTED;
+  };
+
+  const startConversation = async () => {
+    setError('');
+    setTranscript('');
+    setReply('');
+    const ok = await ensureMic();
+    if (!ok) {
+      setError('Mic permission allow karein.');
+      return;
+    }
+    continuousRef.current = true;
+    processingRef.current = false;
+    await startListenInternal();
+  };
+
+  const stopConversation = async () => {
+    continuousRef.current = false;
+    processingRef.current = false;
+    clearSilenceTimer();
+    try {
+      await Voice.stop();
+    } catch (_) {}
+    try {
+      Tts.stop();
+    } catch (_) {}
+    setStatus('idle');
   };
 
   const handleClose = async () => {
     cancelled.current = true;
+    continuousRef.current = false;
+    clearSilenceTimer();
     try {
       await Voice.stop();
       await Voice.destroy();
@@ -507,15 +694,10 @@ Reply short for speaking aloud.
   };
 
   const onMainPress = () => {
-    const s = statusRef.current;
-    if (s === 'listening') stopListen();
-    else if (s === 'speaking') {
-      Tts.stop();
-      setStatus('idle');
-    } else if (s === 'thinking') {
-      // ignore
+    if (statusRef.current === 'idle') {
+      startConversation();
     } else {
-      startListen();
+      stopConversation();
     }
   };
 
