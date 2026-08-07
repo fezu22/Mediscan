@@ -25,8 +25,10 @@ export default function LoginScreen() {
     signInWithEmail,
     signUpWithEmail,
     signInWithGoogle,
+    signInWithFacebook,
     isAuthenticated,
     loading: authLoading,
+    user,
   } = useAuth();
 
   const [isSignUp, setIsSignUp] = useState(false);
@@ -36,13 +38,19 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadingGoogle, setLoadingGoogle] = useState(false);
+  const [loadingFacebook, setLoadingFacebook] = useState(false);
 
-  // Agar already logged in hai → seedha Main
+  // Sirf woh users jinka profile already complete hai → Main
   useEffect(() => {
     if (!authLoading && isAuthenticated) {
-      navigation.reset({ index: 0, routes: [{ name: 'Main' }] });
+      const profileDone =
+        user?.profileComplete || user?.user_metadata?.profileComplete;
+
+      if (profileDone) {
+        navigation.reset({ index: 0, routes: [{ name: 'Main' }] });
+      }
     }
-  }, [authLoading, isAuthenticated, navigation]);
+  }, [authLoading, isAuthenticated, user, navigation]);
 
   const goToCompleteProfile = () => {
     navigation.reset({ index: 0, routes: [{ name: 'CompleteProfile' }] });
@@ -66,11 +74,10 @@ export default function LoginScreen() {
       setLoading(true);
       if (isSignUp) {
         await signUpWithEmail(email, password);
-        goToCompleteProfile();
       } else {
         await signInWithEmail(email, password);
-        goToCompleteProfile();
       }
+      goToCompleteProfile();
     } catch (error) {
       Alert.alert(
         isSignUp ? 'Sign Up Failed' : 'Login Failed',
@@ -94,6 +101,22 @@ export default function LoginScreen() {
       );
     } finally {
       setLoadingGoogle(false);
+    }
+  };
+
+  const handleFacebook = async () => {
+    try {
+      setLoadingFacebook(true);
+      const result = await signInWithFacebook();
+      if (result?.cancelled) return;
+      goToCompleteProfile();
+    } catch (error) {
+      Alert.alert(
+        'Facebook Sign-In Failed',
+        error?.message || 'Please try again.',
+      );
+    } finally {
+      setLoadingFacebook(false);
     }
   };
 
@@ -267,15 +290,19 @@ export default function LoginScreen() {
 
             {/* Facebook */}
             <Pressable
-              style={[styles.socialCircle, styles.facebookCircle]}
-              onPress={() =>
-                Alert.alert(
-                  'Coming Soon',
-                  'Facebook login will be added soon.',
-                )
-              }
+              style={[
+                styles.socialCircle,
+                styles.facebookCircle,
+                loadingFacebook && { opacity: 0.6 },
+              ]}
+              onPress={handleFacebook}
+              disabled={loadingFacebook}
             >
-              <Text style={styles.facebookF}>f</Text>
+              {loadingFacebook ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text style={styles.facebookF}>f</Text>
+              )}
             </Pressable>
           </View>
 

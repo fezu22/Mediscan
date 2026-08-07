@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { Linking } from 'react-native';
 import { ENV } from '@/lib/env';
 import { supabase } from '@/lib/supabase';
 
@@ -13,6 +14,7 @@ try {
 
 let isGoogleConfigured = false;
 let lastGoogleConfigWarning = '';
+const FACEBOOK_AUTH_REDIRECT = ENV.FACEBOOK_REDIRECT_URL || 'https://bluqahzgizrschligjri.supabase.co/auth/v1/callback';
 
 function configureGoogleSignIn() {
   if (!GoogleSignin || isGoogleConfigured) return true;
@@ -64,6 +66,22 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     let mounted = true;
 
+    const handleIncomingUrl = async (url) => {
+      if (!url) return;
+      if (!url.includes('/auth/v1/callback') && !url.includes('/auth/callback')) return;
+
+      try {
+        const result = await supabase.auth.getSession();
+        const currentSession = result?.data?.session ?? null;
+        if (!mounted) return;
+        setSession(currentSession);
+        setUser(currentSession?.user ?? null);
+        setLoading(false);
+      } catch (e) {
+        console.warn('Auth redirect handling error:', e);
+      }
+    };
+
     const boot = async () => {
       try {
         const timeout = new Promise((resolve) =>
@@ -86,8 +104,16 @@ export function AuthProvider({ children }) {
 
     boot();
 
+    Linking.getInitialURL()
+      .then((url) => handleIncomingUrl(url))
+      .catch(() => undefined);
+
+    const subscription = Linking.addEventListener('url', ({ url }) => {
+      handleIncomingUrl(url);
+    });
+
     const {
-      data: { subscription },
+      data: { subscription: authSubscription },
     } = supabase.auth.onAuthStateChange((_event, newSession) => {
       if (!mounted) return;
       setSession(newSession);
@@ -97,7 +123,8 @@ export function AuthProvider({ children }) {
 
     return () => {
       mounted = false;
-      subscription.unsubscribe();
+      subscription?.remove?.();
+      authSubscription.unsubscribe();
     };
   }, []);
 
@@ -174,6 +201,39 @@ export function AuthProvider({ children }) {
     }
   };
 
+  const signInWithFacebook = async () => {
+    try {
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'facebook',
+        options: {
+          redirectTo: FACEBOOK_AUTH_REDIRECT,
+          skipBrowserRedirect: false,
+        },
+      });
+
+      if (error) throw error;
+
+      if (data?.url) {
+        const canOpen = await Linking.canOpenURL(data.url);
+        if (!canOpen) {
+          throw new Error('Unable to open the Facebook sign-in page.');
+        }
+        await Linking.openURL(data.url);
+      }
+
+      return { success: true, data };
+    } catch (error) {
+      const message = error?.message || 'Facebook sign-in failed.';
+      if (message.toLowerCase().includes('cancel')) {
+        return { success: false, cancelled: true };
+      }
+
+      const wrappedError = new Error(message);
+      wrappedError.originalError = error;
+      throw wrappedError;
+    }
+  };
+
   const signOut = async () => {
     try {
       if (GoogleSignin) await GoogleSignin.signOut();
@@ -193,6 +253,7 @@ export function AuthProvider({ children }) {
       signInWithEmail,
       signUpWithEmail,
       signInWithGoogle,
+      signInWithFacebook,
       signOut,
     }),
     [user, session, loading],
