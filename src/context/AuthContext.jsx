@@ -1,25 +1,21 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { Linking } from 'react-native';
-import { ENV } from '@/lib/env';
-import { supabase } from '@/lib/supabase';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { AsyncStorage } from '@react-native-async-storage/async-storage';
+import { supabase } from '../lib/supabase';
+import { GoogleSignin } from '@react-native-google-signin/google-signin';
+import * as Linking from 'expo-linking';
+import { Platform } from 'react-native';
 
-const AuthContext = createContext(undefined);
+const AuthContext = createContext(null);
 
-let GoogleSignin = null;
-try {
-  GoogleSignin = require('@react-native-google-signin/google-signin').GoogleSignin;
-} catch (e) {
-  console.warn('[MedScan] Google Sign-In package not available');
-}
+const FACEBOOK_AUTH_REDIRECT = 'medscan://auth/facebook';
 
 let isGoogleConfigured = false;
-let lastGoogleConfigWarning = '';
-const FACEBOOK_AUTH_REDIRECT = ENV.FACEBOOK_REDIRECT_URL || 'https://bluqahzgizrschligjri.supabase.co/auth/v1/callback';
+let lastGoogleConfigWarning = null;
 
 function configureGoogleSignIn() {
   if (!GoogleSignin || isGoogleConfigured) return true;
 
-  const webClientId = ENV.GOOGLE_WEB_CLIENT_ID;
+  const webClientId = 'YOUR_GOOGLE_WEB_CLIENT_ID'; // Replace with actual from env
   if (!webClientId || webClientId.includes('YOUR_')) {
     const warningKey = 'GOOGLE_WEB_CLIENT_ID missing in env config';
     if (warningKey !== lastGoogleConfigWarning) {
@@ -33,12 +29,12 @@ function configureGoogleSignIn() {
     GoogleSignin.configure({
       webClientId,
       offlineAccess: true,
-      scopes: ['profile', 'email'],
+      forceCodeForRefreshToken: true,
     });
     isGoogleConfigured = true;
     return true;
   } catch (e) {
-    console.warn('[MedScan] GoogleSignin.configure failed', e);
+    console.error('[MedScan] GoogleSignin configure failed:', e);
     return false;
   }
 }
@@ -48,14 +44,18 @@ function getGoogleSignInErrorMessage(error) {
   const message = error?.message || '';
 
   if (code === 'DEVELOPER_ERROR' || message.includes('DEVELOPER_ERROR')) {
-    return 'Google Sign-In is misconfigured. Check your Google Cloud OAuth client, package name (com.medscan), SHA-1 fingerprint, and Android signing setup.';
+    return 'Google Sign-In is misconfigured. Check your Google Cloud OAuth client, package name (com.medscan), and SHA-1 fingerprint.';
   }
 
   if (message.includes('10:') || message.includes('12500')) {
     return 'Google Play services or the Google account setup is not valid on this device.';
   }
 
-  return message || 'Google sign-in failed.';
+  if (code === 'SIGN_IN_CANCELLED' || message.includes('CANCELLED')) {
+    return 'Sign in was cancelled.';
+  }
+
+  return 'Google Sign-In failed. Please try again.';
 }
 
 export function AuthProvider({ children }) {
@@ -76,12 +76,12 @@ export function AuthProvider({ children }) {
         if (!mounted) return;
         setSession(currentSession);
         setUser(currentSession?.user ?? null);
-        setLoading(false);
       } catch (e) {
-        console.warn('Auth redirect handling error:', e);
+        console.log('Deep link session error:', e);
       }
     };
 
+    // Initial session
     const boot = async () => {
       try {
         const timeout = new Promise((resolve) =>
@@ -96,7 +96,9 @@ export function AuthProvider({ children }) {
         setSession(currentSession);
         setUser(currentSession?.user ?? null);
       } catch (e) {
-        console.log('Auth boot error:', e);
+        console.log('Boot session error:', e);
+        setSession(null);
+        setUser(null);
       } finally {
         if (mounted) setLoading(false);
       }
@@ -104,27 +106,22 @@ export function AuthProvider({ children }) {
 
     boot();
 
-    Linking.getInitialURL()
-      .then((url) => handleIncomingUrl(url))
-      .catch(() => undefined);
-
-    const subscription = Linking.addEventListener('url', ({ url }) => {
-      handleIncomingUrl(url);
-    });
-
-    const {
-      data: { subscription: authSubscription },
-    } = supabase.auth.onAuthStateChange((_event, newSession) => {
+    // Auth state listener
+    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
       if (!mounted) return;
-      setSession(newSession);
-      setUser(newSession?.user ?? null);
+      setSession(session);
+      setUser(session?.user ?? null);
       setLoading(false);
     });
 
+    // Deep linking
+    const linkingSub = Linking.addEventListener('url', ({ url }) => handleIncomingUrl(url));
+    const getInitialUrl = Linking.getInitialURL().then(handleIncomingUrl);
+
     return () => {
       mounted = false;
-      subscription?.remove?.();
-      authSubscription.unsubscribe();
+      listener?.subscription?.unsubscribe();
+      linkingSub?.remove?.();
     };
   }, []);
 
@@ -163,41 +160,23 @@ export function AuthProvider({ children }) {
     const configured = configureGoogleSignIn();
 
     if (!configured) {
-      throw new Error('Google Sign-In setup failed. Check the Google configuration and environment values.');
-    }
-
-    if (!ENV.GOOGLE_WEB_CLIENT_ID || ENV.GOOGLE_WEB_CLIENT_ID.includes('YOUR_')) {
-      throw new Error('GOOGLE_WEB_CLIENT_ID missing in env config');
+      throw new Error('Google Sign-In setup failed. Check the Google configuration and environment variables.');
     }
 
     try {
       await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
-      const userInfo = await GoogleSignin.signIn();
-      const idToken = userInfo?.data?.idToken ?? userInfo?.idToken;
-
-      if (!idToken) {
-        throw new Error('No ID token returned from Google');
-      }
-
+      const { idToken } = await GoogleSignin.signIn();
       const { data, error } = await supabase.auth.signInWithIdToken({
         provider: 'google',
         token: idToken,
       });
-
       if (error) throw error;
       return { success: true, data };
     } catch (error) {
-      if (
-        error?.code === 'SIGN_IN_CANCELLED' ||
-        error?.message?.toLowerCase?.().includes('cancel')
-      ) {
-        return { success: false, cancelled: true };
+      if (error?.code === 'SIGN_IN_CANCELLED') {
+        return { cancelled: true };
       }
-      const friendlyMessage = getGoogleSignInErrorMessage(error);
-      console.error('Google sign-in error:', error);
-      const wrappedError = new Error(friendlyMessage);
-      wrappedError.originalError = error;
-      throw wrappedError;
+      throw new Error(getGoogleSignInErrorMessage(error));
     }
   };
 
@@ -210,27 +189,10 @@ export function AuthProvider({ children }) {
           skipBrowserRedirect: false,
         },
       });
-
       if (error) throw error;
-
-      if (data?.url) {
-        const canOpen = await Linking.canOpenURL(data.url);
-        if (!canOpen) {
-          throw new Error('Unable to open the Facebook sign-in page.');
-        }
-        await Linking.openURL(data.url);
-      }
-
       return { success: true, data };
     } catch (error) {
-      const message = error?.message || 'Facebook sign-in failed.';
-      if (message.toLowerCase().includes('cancel')) {
-        return { success: false, cancelled: true };
-      }
-
-      const wrappedError = new Error(message);
-      wrappedError.originalError = error;
-      throw wrappedError;
+      throw new Error(error?.message || 'Facebook Sign-In failed');
     }
   };
 
@@ -243,21 +205,20 @@ export function AuthProvider({ children }) {
     setSession(null);
   };
 
-  const value = useMemo(
-    () => ({
-      user,
-      session,
-      loading,
-      isAuthenticated: !!session?.user,
-      signInStub,
-      signInWithEmail,
-      signUpWithEmail,
-      signInWithGoogle,
-      signInWithFacebook,
-      signOut,
-    }),
-    [user, session, loading],
-  );
+  const isAuthenticated = !!session;
+
+  const value = {
+    user,
+    session,
+    loading,
+    isAuthenticated,
+    signInStub,
+    signInWithEmail,
+    signUpWithEmail,
+    signInWithGoogle,
+    signInWithFacebook,
+    signOut,
+  };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
