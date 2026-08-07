@@ -66,10 +66,7 @@ export default function ProfileScreen() {
           } catch (e) {
             console.log('Sign out error:', e);
           }
-          navigation.reset({
-            index: 0,
-            routes: [{ name: 'Login' }],
-          });
+          // Auth guard in RootNavigator will automatically redirect to Login screen
         },
       },
     ]);
