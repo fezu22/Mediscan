@@ -52,7 +52,7 @@ function displayContact(user) {
 export default function ProfileScreen() {
   const navigation = useNavigation();
   const { user, session, signOut, isAuthenticated } = useAuth();
-  const { language, setLanguage } = useLanguage();
+  const { language, setLanguage, supportedLanguages } = useLanguage();
   const [scanCount, setScanCount] = useState(0);
 
   useFocusEffect(
@@ -140,6 +140,13 @@ export default function ProfileScreen() {
     },
   ];
 
+  const langs =
+    supportedLanguages ||
+    [
+      { code: 'en', native: 'English', flag: '🇬🇧' },
+      { code: 'ur', native: 'اردو', flag: '🇵🇰' },
+    ];
+
   return (
     <ScreenContainer edges={['top']}>
       <ScrollView
@@ -148,7 +155,6 @@ export default function ProfileScreen() {
       >
         <Text style={styles.pageTitle}>Profile</Text>
 
-        {/* Header card */}
         <LinearGradient
           colors={['#0E9F8E', '#0B7A6D']}
           start={{ x: 0, y: 0 }}
@@ -171,7 +177,6 @@ export default function ProfileScreen() {
           </View>
         </LinearGradient>
 
-        {/* Stats */}
         <View style={styles.statsRow}>
           <Card style={styles.statCard}>
             <Text style={styles.statEmoji}>📋</Text>
@@ -187,40 +192,30 @@ export default function ProfileScreen() {
           </Card>
         </View>
 
-        {/* Language */}
         <Text style={styles.sectionLabel}>Language</Text>
         <Card style={styles.langCard}>
-          <Pressable
-            onPress={() => setLanguage('en')}
-            style={[styles.langBtn, language === 'en' && styles.langBtnActive]}
-          >
-            <Text style={styles.langEmoji}>🇬🇧</Text>
-            <Text
+          {langs.map((lang) => (
+            <Pressable
+              key={lang.code}
+              onPress={() => setLanguage(lang.code)}
               style={[
-                styles.langText,
-                language === 'en' && styles.langTextActive,
+                styles.langBtn,
+                language === lang.code && styles.langBtnActive,
               ]}
             >
-              English
-            </Text>
-          </Pressable>
-          <Pressable
-            onPress={() => setLanguage('ur')}
-            style={[styles.langBtn, language === 'ur' && styles.langBtnActive]}
-          >
-            <Text style={styles.langEmoji}>🇵🇰</Text>
-            <Text
-              style={[
-                styles.langText,
-                language === 'ur' && styles.langTextActive,
-              ]}
-            >
-              اردو
-            </Text>
-          </Pressable>
+              <Text style={styles.langEmoji}>{lang.flag}</Text>
+              <Text
+                style={[
+                  styles.langText,
+                  language === lang.code && styles.langTextActive,
+                ]}
+              >
+                {lang.native}
+              </Text>
+            </Pressable>
+          ))}
         </Card>
 
-        {/* Settings */}
         <Text style={styles.sectionLabel}>Settings</Text>
         <Card style={styles.settingsCard}>
           {rows.map((row, i) => (
@@ -242,7 +237,6 @@ export default function ProfileScreen() {
           ))}
         </Card>
 
-        {/* Logout / Login */}
         {isAuthenticated || session || user ? (
           <Pressable onPress={handleLogout} style={styles.logoutBtn}>
             <Text style={styles.logoutEmoji}>🚪</Text>

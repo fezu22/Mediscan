@@ -7,7 +7,13 @@ import {
   RefreshControl,
   StyleSheet,
 } from 'react-native';
-import { ScanLine, Lightbulb, Clock, ChevronRight, User2 } from 'lucide-react-native';
+import {
+  ScanLine,
+  Lightbulb,
+  Clock,
+  ChevronRight,
+  User2,
+} from 'lucide-react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import ScreenContainer from '@/components/ScreenContainer';
 import Card from '@/components/Card';
@@ -63,6 +69,13 @@ export default function HomeScreen() {
     });
   };
 
+  const displayName =
+    user?.user_metadata?.full_name ||
+    user?.user_metadata?.name ||
+    user?.name ||
+    user?.email?.split('@')[0] ||
+    'there';
+
   return (
     <ScreenContainer edges={['top']}>
       <ScrollView
@@ -76,11 +89,10 @@ export default function HomeScreen() {
           />
         }
       >
-        {/* Header */}
         <View style={styles.headerRow}>
-          <View>
+          <View style={styles.headerTextWrap}>
             <Text style={styles.greetingText}>{t.home.greeting},</Text>
-            <Text style={styles.userName}>{user?.name ?? 'there'}</Text>
+            <Text style={styles.userName}>{displayName}</Text>
           </View>
           <Pressable
             style={styles.avatarButton}
@@ -90,19 +102,9 @@ export default function HomeScreen() {
           </Pressable>
         </View>
 
-        {/* Scan CTA */}
         <Pressable
           onPress={() => navigation.navigate('Camera')}
-          style={[
-            styles.scanButton,
-            {
-              shadowColor: '#FF7A59',
-              shadowOffset: { width: 0, height: 10 },
-              shadowOpacity: 0.25,
-              shadowRadius: 20,
-              elevation: 6,
-            },
-          ]}
+          style={styles.scanButton}
         >
           <View style={styles.scanIconContainer}>
             <ScanLine size={30} color="#FFFFFF" />
@@ -115,7 +117,6 @@ export default function HomeScreen() {
           {scansLeft} {t.home.scansLeft} · {t.home.upgrade}
         </Text>
 
-        {/* Quick Tips */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t.home.quickTips}</Text>
           <View style={styles.quickTipsList}>
@@ -130,7 +131,6 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* Recent Scans */}
         <View style={styles.section}>
           <View style={styles.sectionHeaderRow}>
             <Text style={styles.sectionTitle}>{t.home.recentScan}</Text>
@@ -191,13 +191,14 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  scrollContent: { paddingBottom: 32 },
+  scrollContent: { paddingBottom: 32, paddingTop: 4 },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginTop: 8,
   },
+  headerTextWrap: { flex: 1, marginRight: 12 },
   greetingText: { color: colors.textMuted, fontSize: 14 },
   userName: {
     color: colors.textDark,
@@ -220,6 +221,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingVertical: 28,
     alignItems: 'center',
+    shadowColor: '#FF7A59',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 6,
   },
   scanIconContainer: {
     width: 64,

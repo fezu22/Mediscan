@@ -64,12 +64,27 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     let mounted = true;
 
-    supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
-      if (!mounted) return;
-      setSession(currentSession);
-      setUser(currentSession?.user ?? null);
-      setLoading(false);
-    });
+    const boot = async () => {
+      try {
+        const timeout = new Promise((resolve) =>
+          setTimeout(() => resolve({ data: { session: null } }), 1200),
+        );
+        const result = await Promise.race([
+          supabase.auth.getSession(),
+          timeout,
+        ]);
+        if (!mounted) return;
+        const currentSession = result?.data?.session ?? null;
+        setSession(currentSession);
+        setUser(currentSession?.user ?? null);
+      } catch (e) {
+        console.log('Auth boot error:', e);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+
+    boot();
 
     const {
       data: { subscription },
@@ -93,6 +108,24 @@ export function AuthProvider({ children }) {
       ...prev,
       ...partial,
     }));
+  };
+
+  const signInWithEmail = async (email, password) => {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: email.trim().toLowerCase(),
+      password,
+    });
+    if (error) throw error;
+    return { success: true, data };
+  };
+
+  const signUpWithEmail = async (email, password) => {
+    const { data, error } = await supabase.auth.signUp({
+      email: email.trim().toLowerCase(),
+      password,
+    });
+    if (error) throw error;
+    return { success: true, data };
   };
 
   const signInWithGoogle = async () => {
@@ -157,6 +190,8 @@ export function AuthProvider({ children }) {
       loading,
       isAuthenticated: !!session?.user,
       signInStub,
+      signInWithEmail,
+      signUpWithEmail,
       signInWithGoogle,
       signOut,
     }),

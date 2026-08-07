@@ -1,22 +1,45 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { I18nManager } from 'react-native';
+import { I18nManager, Platform, DevSettings } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getDictionary, isRTL } from '@/localization';
+import { getDictionary, isRTL, SUPPORTED_LANGUAGES } from '@/localization';
 
 const LANGUAGE_STORAGE_KEY = '@medscan/language';
+const LANGUAGE_CHOSEN_KEY = '@medscan/language_chosen';
 
 const LanguageContext = createContext(undefined);
 
+async function applyRTL(lang) {
+  const shouldRTL = isRTL(lang);
+  if (I18nManager.isRTL === shouldRTL) return false;
+  I18nManager.allowRTL(shouldRTL);
+  I18nManager.forceRTL(shouldRTL);
+  return true;
+}
+
 export function LanguageProvider({ children }) {
   const [language, setLanguageState] = useState('en');
+  const [languageChosen, setLanguageChosen] = useState(false);
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
     (async () => {
       try {
-        const stored = await AsyncStorage.getItem(LANGUAGE_STORAGE_KEY);
-        if (stored === 'en' || stored === 'ur') {
-          setLanguageState(stored);
+        const [stored, chosen] = await Promise.all([
+          AsyncStorage.getItem(LANGUAGE_STORAGE_KEY),
+          AsyncStorage.getItem(LANGUAGE_CHOSEN_KEY),
+        ]);
+
+        const valid = SUPPORTED_LANGUAGES.some((l) => l.code === stored)
+          ? stored
+          : 'en';
+
+        setLanguageState(valid);
+        setLanguageChosen(chosen === '1');
+
+        const shouldRTL = isRTL(valid);
+        if (I18nManager.isRTL !== shouldRTL) {
+          I18nManager.allowRTL(shouldRTL);
+          I18nManager.forceRTL(shouldRTL);
         }
       } finally {
         setIsReady(true);
@@ -24,28 +47,42 @@ export function LanguageProvider({ children }) {
     })();
   }, []);
 
-  const setLanguage = async (lang) => {
-    setLanguageState(lang);
-    await AsyncStorage.setItem(LANGUAGE_STORAGE_KEY, lang);
+  const setLanguage = async (lang, { markChosen = true } = {}) => {
+    const next = SUPPORTED_LANGUAGES.some((l) => l.code === lang) ? lang : 'en';
+    setLanguageState(next);
+    await AsyncStorage.setItem(LANGUAGE_STORAGE_KEY, next);
 
-    // Note: a full RTL flip via I18nManager.forceRTL requires an app reload
-    // to take visual effect on native layout. We still set it so the next
-    // cold start renders correctly. In-session, screens should also read
-    // `isRTL(language)` directly to mirror text alignment/flex-direction
-    // without requiring a restart.
-    const shouldBeRTL = isRTL(lang);
-    if (I18nManager.isRTL !== shouldBeRTL) {
-      I18nManager.allowRTL(shouldBeRTL);
-      I18nManager.forceRTL(shouldBeRTL);
+    if (markChosen) {
+      setLanguageChosen(true);
+      await AsyncStorage.setItem(LANGUAGE_CHOSEN_KEY, '1');
+    }
+
+    const needsReload = await applyRTL(next);
+    if (needsReload) {
+      try {
+        if (__DEV__ && DevSettings?.reload) {
+          DevSettings.reload();
+        }
+      } catch (_) {}
     }
   };
 
   const value = useMemo(
-    () => ({ language, t: getDictionary(language), isReady, setLanguage }),
-    [language, isReady],
+    () => ({
+      language,
+      languageChosen,
+      isReady,
+      t: getDictionary(language),
+      setLanguage,
+      supportedLanguages: SUPPORTED_LANGUAGES,
+      isRTLLayout: isRTL(language),
+    }),
+    [language, languageChosen, isReady],
   );
 
-  return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>;
+  return (
+    <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>
+  );
 }
 
 export function useLanguage() {
