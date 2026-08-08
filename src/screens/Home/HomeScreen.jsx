@@ -14,6 +14,7 @@ import { Lightbulb, User2, Pill, FileText } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Card from '@/components/Card';
+
 import { useLanguage } from '@/context/LanguageContext';
 import { useAuth } from '@/context/AuthContext';
 import { colors } from '@/theme/colors';
@@ -24,14 +25,26 @@ const CARD_H_PAD = 14;
 const CARD_MARGIN = 16;
 const BANNER_GAP = 10;
 const BANNER_WIDTH = SCREEN_WIDTH - CARD_MARGIN * 2 - CARD_H_PAD * 2;
-const BANNER_HEIGHT = Math.round(BANNER_WIDTH * 0.6);
+const BANNER_HEIGHT = Math.round(BANNER_WIDTH * 0.60);
 const AUTO_SCROLL_MS = 3500;
 
 const BANNERS = [
-  { id: 'scan', image: require('../../assets/Banners/banner_scan.jpg') },
-  { id: 'family', image: require('../../assets/Banners/banner_family.jpg') },
-  { id: 'history', image: require('../../assets/Banners/banner_history.jpg') },
-  { id: 'verify', image: require('../../assets/Banners/banner_verify.jpg') },
+  {
+    id: 'scan',
+    image: require('../../assets/Banners/banner_scan.jpg'),
+  },
+  {
+    id: 'family',
+    image: require('../../assets/Banners/banner_family.jpg'),
+  },
+  {
+    id: 'history',
+    image: require('../../assets/Banners/banner_history.jpg'),
+  },
+  {
+    id: 'verify',
+    image: require('../../assets/Banners/banner_verify.jpg'),
+  },
 ];
 
 export default function HomeScreen() {
@@ -82,7 +95,9 @@ export default function HomeScreen() {
   };
 
   const renderBanner = ({ item }) => (
-    <View style={[styles.bannerSlide, { width: BANNER_WIDTH, height: BANNER_HEIGHT }]}>
+    <View
+      style={[styles.bannerSlide, { width: BANNER_WIDTH, height: BANNER_HEIGHT }]}
+    >
       <Image
         source={item.image}
         style={{ width: BANNER_WIDTH, height: BANNER_HEIGHT }}
@@ -106,7 +121,7 @@ export default function HomeScreen() {
           </View>
           <View style={styles.headerRight}>
             <Image
-              source={require('../../../assets/images/logo.png')}
+              source={require('../../assets/images/logo.png')}
               style={styles.headerLogo}
               resizeMode="contain"
             />
@@ -133,6 +148,7 @@ export default function HomeScreen() {
         }
       >
         <View style={styles.card}>
+          {/* Banners */}
           <View style={styles.bannerWrap}>
             <FlatList
               ref={bannerRef}
@@ -145,7 +161,9 @@ export default function HomeScreen() {
               decelerationRate="fast"
               snapToAlignment="start"
               disableIntervalMomentum
-              ItemSeparatorComponent={() => <View style={{ width: BANNER_GAP }} />}
+              ItemSeparatorComponent={() => (
+                <View style={{ width: BANNER_GAP }} />
+              )}
               onScroll={onBannerScroll}
               scrollEventThrottle={16}
               getItemLayout={(_, index) => ({
@@ -164,10 +182,13 @@ export default function HomeScreen() {
             </View>
           </View>
 
+          {/* Scan buttons */}
           <View style={styles.scanRow}>
             <Pressable
               style={[styles.scanCard, styles.scanMedicine]}
-              onPress={() => navigation.navigate('Camera', { scanType: 'medicine' })}
+              onPress={() =>
+                navigation.navigate('Camera', { scanType: 'medicine' })
+              }
             >
               <Pill size={22} color="#fff" />
               <Text style={styles.scanCardTitle}>Medicine</Text>
@@ -176,7 +197,9 @@ export default function HomeScreen() {
 
             <Pressable
               style={[styles.scanCard, styles.scanReport]}
-              onPress={() => navigation.navigate('Camera', { scanType: 'report' })}
+              onPress={() =>
+                navigation.navigate('Camera', { scanType: 'report' })
+              }
             >
               <FileText size={22} color="#fff" />
               <Text style={styles.scanCardTitle}>Report</Text>
@@ -184,6 +207,7 @@ export default function HomeScreen() {
             </Pressable>
           </View>
 
+          {/* Quick Tips */}
           <Text style={styles.sectionTitle}>
             {t.home?.quickTips || 'Quick Tips'}
           </Text>
@@ -195,6 +219,7 @@ export default function HomeScreen() {
               <Text style={styles.tipText}>{tip}</Text>
             </Card>
           ))}
+
         </View>
       </ScrollView>
     </View>

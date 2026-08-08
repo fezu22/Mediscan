@@ -95,6 +95,7 @@ export default function CameraScreen() {
       if (status === 'success' && scannedImages?.length > 0) {
         goToResult(scannedImages[0]);
       } else {
+        // User cancelled or no image — stay on screen, no crash
         console.log('Scan cancelled or no image');
       }
     } catch (error) {
@@ -240,17 +241,33 @@ export default function CameraScreen() {
 
               {scanType === 'medicine' ? (
                 <View style={[styles.guideFrame, styles.guideMedicine]}>
-                  <View style={[styles.corner, styles.tl, { borderColor: current.color }]} />
-                  <View style={[styles.corner, styles.tr, { borderColor: current.color }]} />
-                  <View style={[styles.corner, styles.bl, { borderColor: current.color }]} />
-                  <View style={[styles.corner, styles.br, { borderColor: current.color }]} />
+                  <View
+                    style={[styles.corner, styles.tl, { borderColor: current.color }]}
+                  />
+                  <View
+                    style={[styles.corner, styles.tr, { borderColor: current.color }]}
+                  />
+                  <View
+                    style={[styles.corner, styles.bl, { borderColor: current.color }]}
+                  />
+                  <View
+                    style={[styles.corner, styles.br, { borderColor: current.color }]}
+                  />
                 </View>
               ) : (
                 <View style={[styles.guideFrame, styles.guideDoc]}>
-                  <View style={[styles.corner, styles.tl, { borderColor: current.color }]} />
-                  <View style={[styles.corner, styles.tr, { borderColor: current.color }]} />
-                  <View style={[styles.corner, styles.bl, { borderColor: current.color }]} />
-                  <View style={[styles.corner, styles.br, { borderColor: current.color }]} />
+                  <View
+                    style={[styles.corner, styles.tl, { borderColor: current.color }]}
+                  />
+                  <View
+                    style={[styles.corner, styles.tr, { borderColor: current.color }]}
+                  />
+                  <View
+                    style={[styles.corner, styles.bl, { borderColor: current.color }]}
+                  />
+                  <View
+                    style={[styles.corner, styles.br, { borderColor: current.color }]}
+                  />
                 </View>
               )}
             </View>

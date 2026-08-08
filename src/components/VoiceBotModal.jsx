@@ -13,7 +13,7 @@ import Voice from '@react-native-voice/voice';
 import Tts from 'react-native-tts';
 import Config from 'react-native-config';
 
-const GEMINI_MODEL = 'gemini-3.1-flash-lite';
+const GEMINI_MODEL = 'gemini-2.0-flash';
 
 const RULES = `
 You are MedScan voice assistant for medicines and lab reports only.

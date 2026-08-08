@@ -21,7 +21,7 @@ import { useLanguage } from '@/context/LanguageContext';
 import VoiceBotModal from '@/components/VoiceBotModal';
 import { colors } from '@/theme/colors';
 
-const GEMINI_MODEL = 'gemini-3.1-flash-lite';
+const GEMINI_MODEL = 'gemini-2.0-flash';
 
 const LANG_NAMES = {
   en: 'English',
@@ -153,6 +153,12 @@ export default function ResultScreen() {
       setRawText(null);
       setChatMessages([]);
 
+      if (!Config.GEMINI_API_KEY) {
+        setError('Gemini API key missing. .env mein GEMINI_API_KEY set karein.');
+        setLoading(false);
+        return;
+      }
+
       const cleanPath = uri.replace('file://', '');
       const base64Image = await RNFS.readFile(cleanPath, 'base64');
 
@@ -237,6 +243,7 @@ Extra rules:
       try {
         const parsed = JSON.parse(cleaned);
 
+        // Type mismatch: user selected wrong scan mode
         if (parsed.type === 'mismatch_report') {
           setError(
             'Yeh image Lab Report / Test lag rahi hai.\n\nAap ne Medicine select kiya tha. Sahi result ke liye peeche jaake "Lab Report" choose karein aur dobara scan karein.',
@@ -252,6 +259,7 @@ Extra rules:
           return;
         }
 
+        // Image quality / not medical
         if (
           parsed.type === 'unknown' ||
           (parsed.confidence != null && parsed.confidence < 35) ||
@@ -615,6 +623,7 @@ Reply in 2-5 short clear sentences. Only medicine/report related. No asterisks, 
         <View style={{ height: 16 }} />
       </ScrollView>
 
+      {/* Chat bar + Voice bot button */}
       <View style={styles.chatBar}>
         <Pressable
           onPress={() => setVoiceOpen(true)}
@@ -649,6 +658,7 @@ Reply in 2-5 short clear sentences. Only medicine/report related. No asterisks, 
         </Pressable>
       </View>
 
+      {/* Grok-style voice bot overlay */}
       <VoiceBotModal
         visible={voiceOpen}
         onClose={() => setVoiceOpen(false)}

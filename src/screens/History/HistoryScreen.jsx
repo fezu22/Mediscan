@@ -15,6 +15,7 @@ import Card from '@/components/Card';
 import { getAllScans, deleteScan } from '@/lib/scanStorage';
 import { colors } from '@/theme/colors';
 import { useLanguage } from '@/context/LanguageContext';
+import { useAuth } from '@/context/AuthContext';
 import AppModal from '@/components/AppModal';
 
 function formatDate(iso) {
@@ -38,14 +39,16 @@ export default function HistoryScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const { t } = useLanguage();
+  const { user } = useAuth();
+  const userId = user?.id;
   const [scans, setScans] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
   const [deleteItem, setDeleteItem] = useState(null);
 
   const load = useCallback(async () => {
-    const list = await getAllScans();
+    const list = await getAllScans(userId);
     setScans(list);
-  }, []);
+  }, [userId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -74,7 +77,7 @@ export default function HistoryScreen() {
     if (!deleteItem) return;
     const id = deleteItem.id;
     setDeleteItem(null);
-    const next = await deleteScan(id);
+    const next = await deleteScan(id, userId);
     setScans(next);
   };
 

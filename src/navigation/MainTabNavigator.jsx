@@ -8,7 +8,7 @@ import HomeScreen from '@/screens/Home/HomeScreen';
 import HistoryScreen from '@/screens/History/HistoryScreen';
 import ProfileScreen from '@/screens/Profile/ProfileScreen';
 import CameraScreen from '@/screens/Camera/CameraScreen';
-import ResultScreen from '@/screens/Result/ResultScreen'; // 1. Import ResultScreen
+import ResultScreen from '@/screens/Result/ResultScreen';
 
 const Tab = createBottomTabNavigator();
 
@@ -57,13 +57,13 @@ export default function MainTabNavigator() {
         }}
       />
 
-      {/* 2. Register ResultScreen (Hidden from the bottom tab bar) */}
       <Tab.Screen
         name="Result"
         component={ResultScreen}
         options={{
           title: 'Result',
-          tabBarButton: () => null, // Hides it from the bottom tab bar
+          tabBarButton: () => null,
+          tabBarStyle: { display: 'none' },
         }}
       />
 

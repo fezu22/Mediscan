@@ -2,9 +2,15 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { Linking } from 'react-native';
-import { ENV } from '../lib/env';
+import Config from 'react-native-config';
 
-const AuthContext = createContext(null);
+// Singleton context — prevents duplicate-module crash with Metro/@ alias
+const globalKey = '__MEDSCAN_AUTH_CONTEXT__';
+const AuthContext =
+  globalThis[globalKey] || createContext(undefined);
+if (!globalThis[globalKey]) {
+  globalThis[globalKey] = AuthContext;
+}
 
 const FACEBOOK_AUTH_REDIRECT = 'medscan://auth/facebook';
 
@@ -14,7 +20,7 @@ let lastGoogleConfigWarning = null;
 function configureGoogleSignIn() {
   if (!GoogleSignin || isGoogleConfigured) return true;
 
-  const webClientId = ENV.GOOGLE_WEB_CLIENT_ID || 'YOUR_GOOGLE_WEB_CLIENT_ID';
+  const webClientId = Config.GOOGLE_WEB_CLIENT_ID || 'YOUR_GOOGLE_WEB_CLIENT_ID';
   if (!webClientId || webClientId.includes('YOUR_')) {
     const warningKey = 'GOOGLE_WEB_CLIENT_ID missing in env config';
     if (warningKey !== lastGoogleConfigWarning) {
@@ -263,6 +269,8 @@ export function AuthProvider({ children }) {
 
 export function useAuth() {
   const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth must be used within an AuthProvider');
+  if (ctx === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
   return ctx;
 }
