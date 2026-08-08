@@ -10,8 +10,8 @@ import {
   FlatList,
   Dimensions,
 } from 'react-native';
-import { Lightbulb, User2 } from 'lucide-react-native';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { Lightbulb, User2, Pill, FileText } from 'lucide-react-native';
+import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Card from '@/components/Card';
 import DisclaimerBanner from '@/components/DisclaimerBanner';
@@ -25,7 +25,7 @@ const CARD_H_PAD = 14;
 const CARD_MARGIN = 16;
 const BANNER_GAP = 10;
 const BANNER_WIDTH = SCREEN_WIDTH - CARD_MARGIN * 2 - CARD_H_PAD * 2;
-const BANNER_HEIGHT = Math.round(BANNER_WIDTH * 0.48);
+const BANNER_HEIGHT = Math.round(BANNER_WIDTH * 0.60);
 const AUTO_SCROLL_MS = 3500;
 
 const BANNERS = [
@@ -95,7 +95,9 @@ export default function HomeScreen() {
   };
 
   const renderBanner = ({ item }) => (
-    <View style={[styles.bannerSlide, { width: BANNER_WIDTH, height: BANNER_HEIGHT }]}>
+    <View
+      style={[styles.bannerSlide, { width: BANNER_WIDTH, height: BANNER_HEIGHT }]}
+    >
       <Image
         source={item.image}
         style={{ width: BANNER_WIDTH, height: BANNER_HEIGHT }}
@@ -146,6 +148,7 @@ export default function HomeScreen() {
         }
       >
         <View style={styles.card}>
+          {/* Banners */}
           <View style={styles.bannerWrap}>
             <FlatList
               ref={bannerRef}
@@ -158,7 +161,9 @@ export default function HomeScreen() {
               decelerationRate="fast"
               snapToAlignment="start"
               disableIntervalMomentum
-              ItemSeparatorComponent={() => <View style={{ width: BANNER_GAP }} />}
+              ItemSeparatorComponent={() => (
+                <View style={{ width: BANNER_GAP }} />
+              )}
               onScroll={onBannerScroll}
               scrollEventThrottle={16}
               getItemLayout={(_, index) => ({
@@ -177,7 +182,35 @@ export default function HomeScreen() {
             </View>
           </View>
 
-          <Text style={styles.sectionTitle}>{t.home?.quickTips || 'Quick Tips'}</Text>
+          {/* Scan buttons */}
+          <View style={styles.scanRow}>
+            <Pressable
+              style={[styles.scanCard, styles.scanMedicine]}
+              onPress={() =>
+                navigation.navigate('Camera', { scanType: 'medicine' })
+              }
+            >
+              <Pill size={22} color="#fff" />
+              <Text style={styles.scanCardTitle}>Medicine</Text>
+              <Text style={styles.scanCardSub}>Pack / strip</Text>
+            </Pressable>
+
+            <Pressable
+              style={[styles.scanCard, styles.scanReport]}
+              onPress={() =>
+                navigation.navigate('Camera', { scanType: 'report' })
+              }
+            >
+              <FileText size={22} color="#fff" />
+              <Text style={styles.scanCardTitle}>Report</Text>
+              <Text style={styles.scanCardSub}>Lab / X-Ray</Text>
+            </Pressable>
+          </View>
+
+          {/* Quick Tips */}
+          <Text style={styles.sectionTitle}>
+            {t.home?.quickTips || 'Quick Tips'}
+          </Text>
           {tips.map((tip, idx) => (
             <Card key={idx} style={styles.tipCard}>
               <View style={styles.tipIcon}>
@@ -242,9 +275,7 @@ const styles = StyleSheet.create({
     shadowRadius: 20,
     elevation: 6,
   },
-  bannerWrap: {
-    marginBottom: 4,
-  },
+  bannerWrap: { marginBottom: 4 },
   bannerSlide: {
     borderRadius: 16,
     overflow: 'hidden',
@@ -266,6 +297,32 @@ const styles = StyleSheet.create({
   dotActive: {
     width: 18,
     backgroundColor: colors.primary,
+  },
+  scanRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 16,
+    marginBottom: 4,
+  },
+  scanCard: {
+    flex: 1,
+    borderRadius: 18,
+    paddingVertical: 18,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+    gap: 4,
+  },
+  scanMedicine: { backgroundColor: '#0E9F8E' },
+  scanReport: { backgroundColor: '#3B82F6' },
+  scanCardTitle: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '700',
+    marginTop: 6,
+  },
+  scanCardSub: {
+    color: 'rgba(255,255,255,0.85)',
+    fontSize: 12,
   },
   sectionTitle: {
     color: colors.textDark || '#1F2937',

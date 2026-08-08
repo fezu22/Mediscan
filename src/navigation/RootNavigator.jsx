@@ -35,7 +35,10 @@ export default function RootNavigator() {
         {!isAuthenticated ? (
           <Stack.Screen name="Login" component={LoginScreen} />
         ) : !profileDone ? (
-          <Stack.Screen name="CompleteProfile" component={CompleteProfileScreen} />
+          <Stack.Screen
+            name="CompleteProfile"
+            component={CompleteProfileScreen}
+          />
         ) : (
           <Stack.Screen name="Main" component={MainTabNavigator} />
         )}
