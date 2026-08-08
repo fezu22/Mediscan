@@ -8,7 +8,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Alert,
   ActivityIndicator,
   Image,
   Modal,
@@ -17,6 +16,7 @@ import { Mail, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/context/AuthContext';
 import { colors } from '@/theme/colors';
+import AppModal from '@/components/AppModal';
 
 export default function LoginScreen() {
   const insets = useSafeAreaInsets();
@@ -42,6 +42,40 @@ export default function LoginScreen() {
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotLoading, setForgotLoading] = useState(false);
 
+  const [modal, setModal] = useState({
+    visible: false,
+    type: 'info',
+    title: '',
+    message: '',
+    confirmText: 'OK',
+    cancelText: 'Cancel',
+    showCancel: false,
+    onConfirm: null,
+  });
+
+  const showModal = (opts) => {
+    setModal({
+      visible: true,
+      type: opts.type || 'info',
+      title: opts.title || '',
+      message: opts.message || '',
+      confirmText: opts.confirmText || 'OK',
+      cancelText: opts.cancelText || 'Cancel',
+      showCancel: !!opts.showCancel,
+      onConfirm: opts.onConfirm || null,
+    });
+  };
+
+  const hideModal = () => {
+    setModal((m) => ({ ...m, visible: false, onConfirm: null }));
+  };
+
+  const handleModalConfirm = () => {
+    const cb = modal.onConfirm;
+    hideModal();
+    if (typeof cb === 'function') setTimeout(cb, 80);
+  };
+
   const openForgotPassword = () => {
     setForgotEmail(email.trim());
     setForgotPasswordVisible(true);
@@ -50,24 +84,28 @@ export default function LoginScreen() {
   const handleForgotPassword = async () => {
     const normalizedEmail = forgotEmail.trim();
     if (!normalizedEmail) {
-      Alert.alert('Error', 'Please enter your email address');
+      showModal({ type: 'error', title: 'Error', message: 'Please enter your email address', showCancel: false });
       return;
     }
 
     try {
       setForgotLoading(true);
       await resetPasswordForEmail(normalizedEmail);
-      Alert.alert(
-        'Check your email',
-        'A password reset link has been sent to your inbox.',
-      );
+      showModal({
+        type: 'success',
+        title: 'Check your email',
+        message: 'A password reset link has been sent to your inbox.',
+        showCancel: false,
+      });
       setForgotPasswordVisible(false);
       setForgotEmail('');
     } catch (error) {
-      Alert.alert(
-        'Reset Failed',
-        error?.message || 'Could not send the reset link. Please try again.',
-      );
+      showModal({
+        type: 'error',
+        title: 'Reset Failed',
+        message: error?.message || 'Could not send the reset link. Please try again.',
+        showCancel: false,
+      });
     } finally {
       setForgotLoading(false);
     }
@@ -75,15 +113,15 @@ export default function LoginScreen() {
 
   const handleEmailAuth = async () => {
     if (!email.trim() || !password.trim()) {
-      Alert.alert('Error', 'Please enter email and password');
+      showModal({ type: 'error', title: 'Error', message: 'Please enter email and password', showCancel: false });
       return;
     }
     if (isSignUp && password !== confirmPassword) {
-      Alert.alert('Error', 'Passwords do not match');
+      showModal({ type: 'error', title: 'Error', message: 'Passwords do not match', showCancel: false });
       return;
     }
     if (isSignUp && password.length < 6) {
-      Alert.alert('Error', 'Password must be at least 6 characters');
+      showModal({ type: 'error', title: 'Error', message: 'Password must be at least 6 characters', showCancel: false });
       return;
     }
 
@@ -92,42 +130,36 @@ export default function LoginScreen() {
       if (isSignUp) {
         const result = await signUpWithEmail(email, password);
 
-        // Signup ke baad auto-login mat karo.
-        // Agar Supabase ne session de diya to sign out kar do
-        // taake user login screen pe rahe.
         if (result?.data?.session) {
           try {
             await signOut();
           } catch (_) {}
         }
 
-        Alert.alert(
-          'Account Created',
-          result?.data?.session
+        showModal({
+          type: 'success',
+          title: 'Account Created',
+          message: result?.data?.session
             ? 'Your account has been created. Please log in with your email and password.'
             : 'Please confirm your email address, then log in.',
-          [
-            {
-              text: 'OK',
-              onPress: () => {
-                setIsSignUp(false);
-                setPassword('');
-                setConfirmPassword('');
-              },
-            },
-          ],
-        );
+          showCancel: false,
+          onConfirm: () => {
+            setIsSignUp(false);
+            setPassword('');
+            setConfirmPassword('');
+          },
+        });
         return;
       }
 
-      // Normal login → RootNavigator automatically
-      // CompleteProfile (agar incomplete) ya Main pe le jayega
       await signInWithEmail(email, password);
     } catch (error) {
-      Alert.alert(
-        isSignUp ? 'Sign Up Failed' : 'Login Failed',
-        error?.message || 'Something went wrong. Please try again.',
-      );
+      showModal({
+        type: 'error',
+        title: isSignUp ? 'Sign Up Failed' : 'Login Failed',
+        message: error?.message || 'Something went wrong. Please try again.',
+        showCancel: false,
+      });
     } finally {
       setLoading(false);
     }
@@ -139,10 +171,12 @@ export default function LoginScreen() {
       const result = await signInWithGoogle();
       if (result?.cancelled) return;
     } catch (error) {
-      Alert.alert(
-        'Google Sign-In Failed',
-        error?.message || 'Please try again.',
-      );
+      showModal({
+        type: 'error',
+        title: 'Google Sign-In Failed',
+        message: error?.message || 'Please try again.',
+        showCancel: false,
+      });
     } finally {
       setLoadingGoogle(false);
     }
@@ -154,10 +188,12 @@ export default function LoginScreen() {
       const result = await signInWithFacebook();
       if (result?.cancelled) return;
     } catch (error) {
-      Alert.alert(
-        'Facebook Sign-In Failed',
-        error?.message || 'Please try again.',
-      );
+      showModal({
+        type: 'error',
+        title: 'Facebook Sign-In Failed',
+        message: error?.message || 'Please try again.',
+        showCancel: false,
+      });
     } finally {
       setLoadingFacebook(false);
     }
@@ -173,6 +209,18 @@ export default function LoginScreen() {
 
   return (
     <View style={styles.container}>
+      <AppModal
+        visible={modal.visible}
+        type={modal.type}
+        title={modal.title}
+        message={modal.message}
+        confirmText={modal.confirmText}
+        cancelText={modal.cancelText}
+        showCancel={modal.showCancel}
+        onConfirm={handleModalConfirm}
+        onCancel={hideModal}
+      />
+
       <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
         <View style={styles.headerRow}>
           <View>

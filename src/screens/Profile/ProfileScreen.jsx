@@ -3,7 +3,6 @@ import {
   View,
   Text,
   Pressable,
-  Alert,
   Linking,
   Image,
   StyleSheet,
@@ -52,6 +51,15 @@ export default function ProfileScreen() {
   const [langModal, setLangModal] = useState(false);
   const [logoutVisible, setLogoutVisible] = useState(false);
   const [loadingVisible, setLoadingVisible] = useState(false);
+  const [infoModal, setInfoModal] = useState({
+    visible: false,
+    title: '',
+    message: '',
+  });
+
+  const showInfo = (title, message) => {
+    setInfoModal({ visible: true, title, message });
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -89,30 +97,30 @@ export default function ProfileScreen() {
     {
       key: 'notifications',
       label: p.notifications || 'Notifications',
-      onPress: () => Alert.alert(p.notifications || 'Notifications', 'Coming soon'),
+      onPress: () => showInfo(p.notifications || 'Notifications', 'Coming soon'),
     },
     {
       key: 'privacy',
       label: p.privacy || 'Privacy Policy',
-      onPress: () => Alert.alert(p.privacy || 'Privacy', 'Your data is safe on device.'),
+      onPress: () => showInfo(p.privacy || 'Privacy', 'Your data is safe on device.'),
     },
     {
       key: 'terms',
       label: p.terms || 'Terms of Service',
       onPress: () =>
-        Alert.alert(p.terms || 'Terms', 'For reference only. Consult a doctor.'),
+        showInfo(p.terms || 'Terms', 'For reference only. Consult a doctor.'),
     },
     {
       key: 'rate',
       label: p.rate || 'Rate App',
-      onPress: () => Alert.alert(p.rate || 'Rate App', 'Play Store link soon.'),
+      onPress: () => showInfo(p.rate || 'Rate App', 'Play Store link soon.'),
     },
     {
       key: 'support',
       label: p.support || 'Support',
       onPress: () => {
         Linking.openURL('mailto:support@medscan.app').catch(() => {
-          Alert.alert(p.support || 'Support', 'support@medscan.app');
+          showInfo(p.support || 'Support', 'support@medscan.app');
         });
       },
     },
@@ -126,7 +134,6 @@ export default function ProfileScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
         <View style={styles.headerRow}>
           <View>
@@ -147,7 +154,6 @@ export default function ProfileScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.card}>
-          {/* User */}
           <View style={styles.profileBlock}>
             <View style={styles.avatar}>
               <Text style={styles.avatarText}>{initials}</Text>
@@ -175,20 +181,17 @@ export default function ProfileScreen() {
             </View>
           </View>
 
-          {/* Scans count */}
           <View style={styles.statBox}>
             <Text style={styles.statNumber}>{scanCount}</Text>
             <Text style={styles.statLabel}>{p.totalScans || 'Total Scans'}</Text>
           </View>
 
-          {/* Language */}
           <Text style={styles.sectionTitle}>{p.language || 'Language'}</Text>
           <Pressable style={styles.langBtn} onPress={() => setLangModal(true)}>
             <Text style={styles.langBtnText}>{currentLang.native}</Text>
             <Text style={styles.langBtnHint}>{p.selectLanguage || 'Select'}</Text>
           </Pressable>
 
-          {/* Settings */}
           <Text style={[styles.sectionTitle, { marginTop: 20 }]}>
             {p.settings || 'Settings'}
           </Text>
@@ -219,7 +222,17 @@ export default function ProfileScreen() {
         </View>
       </ScrollView>
 
-      {/* Language Modal — Top 20 */}
+      <AppModal
+        visible={infoModal.visible}
+        type="info"
+        title={infoModal.title}
+        message={infoModal.message}
+        confirmText="OK"
+        showCancel={false}
+        onConfirm={() => setInfoModal((m) => ({ ...m, visible: false }))}
+        onCancel={() => setInfoModal((m) => ({ ...m, visible: false }))}
+      />
+
       <AppModal
         visible={logoutVisible}
         type="confirm"

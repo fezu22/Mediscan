@@ -6,7 +6,6 @@ import {
   Pressable,
   StyleSheet,
   ScrollView,
-  Alert,
   ActivityIndicator,
   Image,
   KeyboardAvoidingView,
@@ -18,6 +17,7 @@ import { User, Calendar, Phone } from 'lucide-react-native';
 import { useAuth } from '@/context/AuthContext';
 import { colors } from '@/theme/colors';
 import { supabase } from '@/lib/supabase';
+import AppModal from '@/components/AppModal';
 
 export default function CompleteProfileScreen() {
   const insets = useSafeAreaInsets();
@@ -28,24 +28,41 @@ export default function CompleteProfileScreen() {
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const [modal, setModal] = useState({
+    visible: false,
+    type: 'error',
+    title: '',
+    message: '',
+  });
+
+  const showModal = (opts) => {
+    setModal({
+      visible: true,
+      type: opts.type || 'error',
+      title: opts.title || '',
+      message: opts.message || '',
+    });
+  };
+
+  const hideModal = () => setModal((m) => ({ ...m, visible: false }));
+
   const handleSave = async () => {
     if (!name.trim()) {
-      Alert.alert('Error', 'Please enter your name');
+      showModal({ type: 'error', title: 'Error', message: 'Please enter your name' });
       return;
     }
     if (!age.trim() || isNaN(Number(age)) || Number(age) < 15) {
-      Alert.alert('Error', 'Age must be 15 or above');
+      showModal({ type: 'error', title: 'Error', message: 'Age must be 15 or above' });
       return;
     }
     if (!phone.trim() || phone.trim().length < 10) {
-      Alert.alert('Error', 'Please enter a valid phone number');
+      showModal({ type: 'error', title: 'Error', message: 'Please enter a valid phone number' });
       return;
     }
 
     try {
       setLoading(true);
 
-      // Store profile data in Supabase Auth user_metadata
       if (user?.id && !String(user.id).startsWith('local-')) {
         const { data, error } = await supabase.auth.updateUser({
           data: {
@@ -80,7 +97,7 @@ export default function CompleteProfileScreen() {
         });
       }
     } catch (error) {
-      Alert.alert('Error', error?.message || 'Could not save profile');
+      showModal({ type: 'error', title: 'Error', message: error?.message || 'Could not save profile' });
     } finally {
       setLoading(false);
     }
@@ -93,6 +110,16 @@ export default function CompleteProfileScreen() {
       end={{ x: 1, y: 1 }}
       style={styles.gradient}
     >
+      <AppModal
+        visible={modal.visible}
+        type={modal.type}
+        title={modal.title}
+        message={modal.message}
+        confirmText="OK"
+        showCancel={false}
+        onConfirm={hideModal}
+        onCancel={hideModal}
+      />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={{ flex: 1 }}

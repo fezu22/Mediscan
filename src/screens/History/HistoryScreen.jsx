@@ -7,7 +7,6 @@ import {
   Pressable,
   Image,
   RefreshControl,
-  Alert,
 } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,6 +15,7 @@ import Card from '@/components/Card';
 import { getAllScans, deleteScan } from '@/lib/scanStorage';
 import { colors } from '@/theme/colors';
 import { useLanguage } from '@/context/LanguageContext';
+import AppModal from '@/components/AppModal';
 
 function formatDate(iso) {
   if (!iso) return '';
@@ -40,6 +40,7 @@ export default function HistoryScreen() {
   const { t } = useLanguage();
   const [scans, setScans] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [deleteItem, setDeleteItem] = useState(null);
 
   const load = useCallback(async () => {
     const list = await getAllScans();
@@ -66,21 +67,31 @@ export default function HistoryScreen() {
   };
 
   const onDelete = (item) => {
-    Alert.alert('Delete scan?', item.name || 'Scan', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          const next = await deleteScan(item.id);
-          setScans(next);
-        },
-      },
-    ]);
+    setDeleteItem(item);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteItem) return;
+    const id = deleteItem.id;
+    setDeleteItem(null);
+    const next = await deleteScan(id);
+    setScans(next);
   };
 
   return (
     <View style={styles.container}>
+      <AppModal
+        visible={!!deleteItem}
+        type="confirm"
+        title="Delete scan?"
+        message={deleteItem?.name || 'Scan'}
+        confirmText="Delete"
+        cancelText="Cancel"
+        showCancel
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteItem(null)}
+      />
+
       {/* Green header */}
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <View style={styles.headerRow}>

@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useState, useRef, useEffect } from 'react';
 import {
   Text,
   View,
@@ -7,18 +7,45 @@ import {
   RefreshControl,
   StyleSheet,
   Image,
+  FlatList,
+  Dimensions,
 } from 'react-native';
-import { ScanLine, Lightbulb, Clock, ChevronRight, User2 } from 'lucide-react-native';
+import { Lightbulb, User2 } from 'lucide-react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Card from '@/components/Card';
 import DisclaimerBanner from '@/components/DisclaimerBanner';
 import { useLanguage } from '@/context/LanguageContext';
 import { useAuth } from '@/context/AuthContext';
-import { getRecentScans } from '@/lib/scanStorage';
 import { colors } from '@/theme/colors';
 
-const DAILY_FREE_LIMIT = 5;
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+const CARD_H_PAD = 14;
+const CARD_MARGIN = 16;
+const BANNER_GAP = 10;
+const BANNER_WIDTH = SCREEN_WIDTH - CARD_MARGIN * 2 - CARD_H_PAD * 2;
+const BANNER_HEIGHT = Math.round(BANNER_WIDTH * 0.48);
+const AUTO_SCROLL_MS = 3500;
+
+const BANNERS = [
+  {
+    id: 'scan',
+    image: require('../../../assets/images/banners/banner_scan.jpg'),
+  },
+  {
+    id: 'family',
+    image: require('../../../assets/images/banners/banner_family.jpg'),
+  },
+  {
+    id: 'history',
+    image: require('../../../assets/images/banners/banner_history.jpg'),
+  },
+  {
+    id: 'verify',
+    image: require('../../../assets/images/banners/banner_verify.jpg'),
+  },
+];
 
 export default function HomeScreen() {
   const navigation = useNavigation();
@@ -26,53 +53,69 @@ export default function HomeScreen() {
   const { t } = useLanguage();
   const { user } = useAuth();
   const [refreshing, setRefreshing] = useState(false);
-  const [recentScans, setRecentScans] = useState([]);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const bannerRef = useRef(null);
+  const indexRef = useRef(0);
+  const timerRef = useRef(null);
 
-  const scansUsedToday = recentScans.filter((s) => {
-    const d = new Date(s.createdAt);
-    const now = new Date();
-    return (
-      d.getFullYear() === now.getFullYear() &&
-      d.getMonth() === now.getMonth() &&
-      d.getDate() === now.getDate()
-    );
-  }).length;
+  const tips = [t.home?.tip1, t.home?.tip2, t.home?.tip3].filter(Boolean);
 
-  const scansLeft = Math.max(DAILY_FREE_LIMIT - scansUsedToday, 0);
-  const tips = [t.home.tip1, t.home.tip2, t.home.tip3];
+  useEffect(() => {
+    timerRef.current = setInterval(() => {
+      const next = (indexRef.current + 1) % BANNERS.length;
+      indexRef.current = next;
+      setActiveIndex(next);
+      try {
+        bannerRef.current?.scrollToIndex({ index: next, animated: true });
+      } catch (_) {
+        bannerRef.current?.scrollToOffset({
+          offset: next * (BANNER_WIDTH + BANNER_GAP),
+          animated: true,
+        });
+      }
+    }, AUTO_SCROLL_MS);
 
-  const loadRecent = useCallback(async () => {
-    const list = await getRecentScans(3);
-    setRecentScans(list);
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
   }, []);
-
-  useFocusEffect(
-    useCallback(() => {
-      loadRecent();
-    }, [loadRecent]),
-  );
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await loadRecent();
     setRefreshing(false);
-  }, [loadRecent]);
+  }, []);
 
-  const openScan = (scan) => {
-    navigation.navigate('Result', {
-      imageUri: scan.imageUri,
-      savedScan: scan,
-    });
+  const onBannerScroll = (e) => {
+    const x = e.nativeEvent.contentOffset.x;
+    const idx = Math.round(x / (BANNER_WIDTH + BANNER_GAP));
+    if (idx !== indexRef.current && idx >= 0 && idx < BANNERS.length) {
+      indexRef.current = idx;
+      setActiveIndex(idx);
+    }
   };
+
+  const renderBanner = ({ item }) => (
+    <View style={[styles.bannerSlide, { width: BANNER_WIDTH, height: BANNER_HEIGHT }]}>
+      <Image
+        source={item.image}
+        style={{ width: BANNER_WIDTH, height: BANNER_HEIGHT }}
+        resizeMode="cover"
+      />
+    </View>
+  );
 
   return (
     <View style={styles.container}>
-      {/* Green header */}
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <View style={styles.headerRow}>
-          <View>
-            <Text style={styles.greeting}>{t.home.greeting},</Text>
-            <Text style={styles.userName}>{user?.name || user?.email?.split('@')[0] || 'there'}</Text>
+          <View style={{ flex: 1, paddingRight: 12 }}>
+            <Text style={styles.greeting}>{t.home?.greeting || 'Hello'},</Text>
+            <Text style={styles.userName} numberOfLines={1}>
+              {user?.user_metadata?.full_name ||
+                user?.name ||
+                user?.email?.split('@')[0] ||
+                'there'}
+            </Text>
           </View>
           <View style={styles.headerRight}>
             <Image
@@ -103,24 +146,38 @@ export default function HomeScreen() {
         }
       >
         <View style={styles.card}>
-          {/* Scan CTA */}
-          <Pressable
-            onPress={() => navigation.navigate('Camera')}
-            style={styles.scanButton}
-          >
-            <View style={styles.scanIconContainer}>
-              <ScanLine size={28} color="#FFFFFF" />
+          <View style={styles.bannerWrap}>
+            <FlatList
+              ref={bannerRef}
+              data={BANNERS}
+              keyExtractor={(item) => item.id}
+              renderItem={renderBanner}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              snapToInterval={BANNER_WIDTH + BANNER_GAP}
+              decelerationRate="fast"
+              snapToAlignment="start"
+              disableIntervalMomentum
+              ItemSeparatorComponent={() => <View style={{ width: BANNER_GAP }} />}
+              onScroll={onBannerScroll}
+              scrollEventThrottle={16}
+              getItemLayout={(_, index) => ({
+                length: BANNER_WIDTH + BANNER_GAP,
+                offset: (BANNER_WIDTH + BANNER_GAP) * index,
+                index,
+              })}
+            />
+            <View style={styles.dotsRow}>
+              {BANNERS.map((b, i) => (
+                <View
+                  key={b.id}
+                  style={[styles.dot, i === activeIndex && styles.dotActive]}
+                />
+              ))}
             </View>
-            <Text style={styles.scanTitle}>{t.home.scanCta}</Text>
-            <Text style={styles.scanSubtitle}>{t.home.scanSubtitle}</Text>
-          </Pressable>
+          </View>
 
-          <Text style={styles.scanStatus}>
-            {scansLeft} {t.home.scansLeft} · {t.home.upgrade}
-          </Text>
-
-          {/* Tips */}
-          <Text style={styles.sectionTitle}>{t.home.quickTips}</Text>
+          <Text style={styles.sectionTitle}>{t.home?.quickTips || 'Quick Tips'}</Text>
           {tips.map((tip, idx) => (
             <Card key={idx} style={styles.tipCard}>
               <View style={styles.tipIcon}>
@@ -129,52 +186,6 @@ export default function HomeScreen() {
               <Text style={styles.tipText}>{tip}</Text>
             </Card>
           ))}
-
-          {/* Recent */}
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>{t.home.recentScan}</Text>
-            {recentScans.length > 0 && (
-              <Pressable
-                style={styles.viewAll}
-                onPress={() => navigation.navigate('History')}
-              >
-                <Text style={styles.viewAllText}>{t.home.viewAll}</Text>
-                <ChevronRight size={14} color={colors.primary} />
-              </Pressable>
-            )}
-          </View>
-
-          {recentScans.length === 0 ? (
-            <Card style={styles.emptyCard}>
-              <Clock size={22} color={colors.primary} />
-              <Text style={styles.emptyTitle}>{t.home.noRecentScan}</Text>
-              <Text style={styles.emptySub}>{t.home.noRecentScanSubtitle}</Text>
-            </Card>
-          ) : (
-            recentScans.map((scan) => (
-              <Pressable key={scan.id} onPress={() => openScan(scan)}>
-                <Card style={styles.recentCard}>
-                  <View style={styles.recentIcon}>
-                    <Clock size={18} color={colors.primary} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.recentTitle} numberOfLines={1}>
-                      {scan.name}
-                    </Text>
-                    <Text style={styles.recentDate}>
-                      {new Date(scan.createdAt).toLocaleString(undefined, {
-                        day: 'numeric',
-                        month: 'short',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                    </Text>
-                  </View>
-                  <ChevronRight size={18} color={colors.textMuted} />
-                </Card>
-              </Pressable>
-            ))
-          )}
 
           <View style={{ marginTop: 20 }}>
             <DisclaimerBanner />
@@ -220,10 +231,10 @@ const styles = StyleSheet.create({
   scrollContent: { paddingBottom: 32 },
   card: {
     backgroundColor: '#FFFFFF',
-    marginHorizontal: 16,
+    marginHorizontal: CARD_MARGIN,
     borderRadius: 28,
-    paddingHorizontal: 18,
-    paddingTop: 22,
+    paddingHorizontal: CARD_H_PAD,
+    paddingTop: 18,
     paddingBottom: 22,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
@@ -231,29 +242,30 @@ const styles = StyleSheet.create({
     shadowRadius: 20,
     elevation: 6,
   },
-  scanButton: {
-    borderRadius: 22,
-    backgroundColor: colors.coral,
-    paddingVertical: 24,
-    alignItems: 'center',
+  bannerWrap: {
+    marginBottom: 4,
   },
-  scanIconContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    alignItems: 'center',
+  bannerSlide: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: '#E6F5F2',
+  },
+  dotsRow: {
+    flexDirection: 'row',
     justifyContent: 'center',
-    marginBottom: 10,
-  },
-  scanTitle: { color: '#fff', fontSize: 18, fontWeight: '700' },
-  scanSubtitle: { color: 'rgba(255,255,255,0.85)', fontSize: 12, marginTop: 4 },
-  scanStatus: {
-    color: colors.textMuted,
-    fontSize: 12,
-    textAlign: 'center',
+    alignItems: 'center',
+    gap: 6,
     marginTop: 12,
-    marginBottom: 8,
+  },
+  dot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: '#D1D5DB',
+  },
+  dotActive: {
+    width: 18,
+    backgroundColor: colors.primary,
   },
   sectionTitle: {
     color: colors.textDark || '#1F2937',
@@ -261,12 +273,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginTop: 16,
     marginBottom: 10,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 8,
   },
   tipCard: {
     flexDirection: 'row',
@@ -290,41 +296,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     paddingTop: 4,
-  },
-  viewAll: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  viewAllText: { color: colors.primary, fontSize: 12, fontWeight: '600' },
-  recentCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 10,
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-  },
-  recentIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: colors.mint || '#E6F5F2',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  recentTitle: {
-    color: colors.textDark || '#1F2937',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  recentDate: { color: colors.textMuted, fontSize: 12, marginTop: 2 },
-  emptyCard: { alignItems: 'center', paddingVertical: 28, gap: 6 },
-  emptyTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.textDark || '#1F2937',
-  },
-  emptySub: {
-    fontSize: 12,
-    color: colors.textMuted,
-    textAlign: 'center',
-    paddingHorizontal: 20,
   },
 });
