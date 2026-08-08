@@ -31,19 +31,19 @@ const AUTO_SCROLL_MS = 3500;
 const BANNERS = [
   {
     id: 'scan',
-    image: require('../../../assets/images/banners/banner_scan.jpg'),
+    image: require('../../assets/Banners/banner_scan.jpg'),
   },
   {
     id: 'family',
-    image: require('../../../assets/images/banners/banner_family.jpg'),
+    image: require('../../assets/Banners/banner_family.jpg'),
   },
   {
     id: 'history',
-    image: require('../../../assets/images/banners/banner_history.jpg'),
+    image: require('../../assets/Banners/banner_history.jpg'),
   },
   {
     id: 'verify',
-    image: require('../../../assets/images/banners/banner_verify.jpg'),
+    image: require('../../assets/Banners/banner_verify.jpg'),
   },
 ];
 
