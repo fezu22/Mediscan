@@ -1,9 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { AsyncStorage } from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
-import * as Linking from 'expo-linking';
-import { Platform } from 'react-native';
+import { Linking } from 'react-native';
+import { ENV } from '../lib/env';
 
 const AuthContext = createContext(null);
 
@@ -15,7 +14,7 @@ let lastGoogleConfigWarning = null;
 function configureGoogleSignIn() {
   if (!GoogleSignin || isGoogleConfigured) return true;
 
-  const webClientId = 'YOUR_GOOGLE_WEB_CLIENT_ID'; // Replace with actual from env
+  const webClientId = ENV.GOOGLE_WEB_CLIENT_ID || 'YOUR_GOOGLE_WEB_CLIENT_ID';
   if (!webClientId || webClientId.includes('YOUR_')) {
     const warningKey = 'GOOGLE_WEB_CLIENT_ID missing in env config';
     if (warningKey !== lastGoogleConfigWarning) {
@@ -26,6 +25,15 @@ function configureGoogleSignIn() {
   }
 
   try {
+    const hasRequiredMethods =
+      typeof GoogleSignin?.configure === 'function' &&
+      typeof GoogleSignin?.hasPlayServices === 'function' &&
+      typeof GoogleSignin?.signIn === 'function';
+
+    if (!hasRequiredMethods) {
+      return false;
+    }
+
     GoogleSignin.configure({
       webClientId,
       offlineAccess: true,
@@ -152,6 +160,17 @@ export function AuthProvider({ children }) {
     return { success: true, data };
   };
 
+  const resetPasswordForEmail = async (email) => {
+    const { data, error } = await supabase.auth.resetPasswordForEmail(
+      email.trim().toLowerCase(),
+      {
+        redirectTo: 'medscan://auth/reset',
+      },
+    );
+    if (error) throw error;
+    return { success: true, data };
+  };
+
   const signInWithGoogle = async () => {
     if (!GoogleSignin) {
       throw new Error('Google Sign-In package not installed');
@@ -164,8 +183,14 @@ export function AuthProvider({ children }) {
     }
 
     try {
-      await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
-      const { idToken } = await GoogleSignin.signIn();
+      if (typeof GoogleSignin.hasPlayServices === 'function') {
+        await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+      }
+      const signInResult = await GoogleSignin.signIn();
+      const idToken = signInResult?.idToken || signInResult?.data?.idToken;
+      if (!idToken) {
+        throw new Error('No ID token returned from Google');
+      }
       const { data, error } = await supabase.auth.signInWithIdToken({
         provider: 'google',
         token: idToken,
@@ -215,6 +240,7 @@ export function AuthProvider({ children }) {
     signInStub,
     signInWithEmail,
     signUpWithEmail,
+    resetPasswordForEmail,
     signInWithGoogle,
     signInWithFacebook,
     signOut,

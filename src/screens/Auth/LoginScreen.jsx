@@ -11,6 +11,7 @@ import {
   Alert,
   ActivityIndicator,
   Image,
+  Modal,
 } from 'react-native';
 import { Mail, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
@@ -24,6 +25,7 @@ export default function LoginScreen() {
   const {
     signInWithEmail,
     signUpWithEmail,
+    resetPasswordForEmail,
     signInWithGoogle,
     signInWithFacebook,
     isAuthenticated,
@@ -39,21 +41,57 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [loadingGoogle, setLoadingGoogle] = useState(false);
   const [loadingFacebook, setLoadingFacebook] = useState(false);
+  const [pendingAuthRedirect, setPendingAuthRedirect] = useState(false);
+  const [forgotPasswordVisible, setForgotPasswordVisible] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotLoading, setForgotLoading] = useState(false);
 
-  // Sirf woh users jinka profile already complete hai → Main
   useEffect(() => {
-    if (!authLoading && isAuthenticated) {
-      const profileDone =
-        user?.profileComplete || user?.user_metadata?.profileComplete;
+    if (!pendingAuthRedirect || authLoading || !isAuthenticated) return;
 
-      if (profileDone) {
-        navigation.reset({ index: 0, routes: [{ name: 'Main' }] });
-      }
+    const profileDone =
+      user?.profileComplete || user?.user_metadata?.profileComplete;
+
+    navigation.reset({
+      index: 0,
+      routes: [{ name: profileDone ? 'Main' : 'CompleteProfile' }],
+    });
+    setPendingAuthRedirect(false);
+  }, [pendingAuthRedirect, authLoading, isAuthenticated, user, navigation]);
+
+  const triggerAuthRedirect = () => {
+    setPendingAuthRedirect(true);
+  };
+
+  const openForgotPassword = () => {
+    setForgotEmail(email.trim());
+    setForgotPasswordVisible(true);
+  };
+
+  const handleForgotPassword = async () => {
+    const normalizedEmail = forgotEmail.trim();
+    if (!normalizedEmail) {
+      Alert.alert('Error', 'Please enter your email address');
+      return;
     }
-  }, [authLoading, isAuthenticated, user, navigation]);
 
-  const goToCompleteProfile = () => {
-    navigation.reset({ index: 0, routes: [{ name: 'CompleteProfile' }] });
+    try {
+      setForgotLoading(true);
+      await resetPasswordForEmail(normalizedEmail);
+      Alert.alert(
+        'Check your email',
+        'A password reset link has been sent to your inbox.',
+      );
+      setForgotPasswordVisible(false);
+      setForgotEmail('');
+    } catch (error) {
+      Alert.alert(
+        'Reset Failed',
+        error?.message || 'Could not send the reset link. Please try again.',
+      );
+    } finally {
+      setForgotLoading(false);
+    }
   };
 
   const handleEmailAuth = async () => {
@@ -73,11 +111,19 @@ export default function LoginScreen() {
     try {
       setLoading(true);
       if (isSignUp) {
-        await signUpWithEmail(email, password);
+        const result = await signUpWithEmail(email, password);
+        const hasSession = !!result?.data?.session;
+        if (!hasSession) {
+          Alert.alert(
+            'Check your email',
+            'Please confirm your email address before signing in.',
+          );
+          return;
+        }
       } else {
         await signInWithEmail(email, password);
       }
-      goToCompleteProfile();
+      triggerAuthRedirect();
     } catch (error) {
       Alert.alert(
         isSignUp ? 'Sign Up Failed' : 'Login Failed',
@@ -93,7 +139,7 @@ export default function LoginScreen() {
       setLoadingGoogle(true);
       const result = await signInWithGoogle();
       if (result?.cancelled) return;
-      goToCompleteProfile();
+      triggerAuthRedirect();
     } catch (error) {
       Alert.alert(
         'Google Sign-In Failed',
@@ -109,7 +155,7 @@ export default function LoginScreen() {
       setLoadingFacebook(true);
       const result = await signInWithFacebook();
       if (result?.cancelled) return;
-      goToCompleteProfile();
+      triggerAuthRedirect();
     } catch (error) {
       Alert.alert(
         'Facebook Sign-In Failed',
@@ -226,15 +272,7 @@ export default function LoginScreen() {
 
           {/* Forgot Password (Login only) */}
           {!isSignUp && (
-            <Pressable
-              style={styles.forgotBtn}
-              onPress={() =>
-                Alert.alert(
-                  'Forgot Password',
-                  'Password reset feature coming soon.',
-                )
-              }
-            >
+            <Pressable style={styles.forgotBtn} onPress={openForgotPassword}>
               <Text style={styles.forgotText}>Forgot Password?</Text>
             </Pressable>
           )}
@@ -305,6 +343,61 @@ export default function LoginScreen() {
               )}
             </Pressable>
           </View>
+
+          <Modal
+            visible={forgotPasswordVisible}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setForgotPasswordVisible(false)}
+          >
+            <View style={styles.modalOverlay}>
+              <View style={styles.modalCard}>
+                <Text style={styles.modalTitle}>Reset Password</Text>
+                <Text style={styles.modalText}>
+                  Enter your email and we’ll send you a reset link.
+                </Text>
+                <View style={styles.inputContainer}>
+                  <Mail
+                    size={18}
+                    color={colors.textMuted}
+                    style={styles.inputIcon}
+                  />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="you@example.com"
+                    placeholderTextColor="#A0AEC0"
+                    value={forgotEmail}
+                    onChangeText={setForgotEmail}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                </View>
+                <View style={styles.modalActions}>
+                  <Pressable
+                    style={[styles.modalBtn, styles.modalBtnSecondary]}
+                    onPress={() => setForgotPasswordVisible(false)}
+                    disabled={forgotLoading}
+                  >
+                    <Text style={styles.modalBtnText}>Cancel</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[styles.modalBtn, styles.modalBtnPrimary]}
+                    onPress={handleForgotPassword}
+                    disabled={forgotLoading}
+                  >
+                    {forgotLoading ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                      <Text style={[styles.modalBtnText, styles.modalBtnTextPrimary]}>
+                        Send Link
+                      </Text>
+                    )}
+                  </Pressable>
+                </View>
+              </View>
+            </View>
+          </Modal>
 
           {/* Toggle Login / Sign Up */}
           <View style={styles.toggleRow}>
@@ -499,5 +592,52 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: colors.primary,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  modalCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 20,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: colors.textDark || '#1F2937',
+    marginBottom: 8,
+  },
+  modalText: {
+    fontSize: 14,
+    color: colors.textMuted,
+    marginBottom: 16,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginTop: 12,
+    gap: 10,
+  },
+  modalBtn: {
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+  },
+  modalBtnSecondary: {
+    backgroundColor: '#F3F4F6',
+  },
+  modalBtnPrimary: {
+    backgroundColor: colors.primary,
+  },
+  modalBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.textDark || '#1F2937',
+  },
+  modalBtnTextPrimary: {
+    color: '#FFFFFF',
   },
 });
