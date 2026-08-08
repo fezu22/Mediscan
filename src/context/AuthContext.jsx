@@ -20,11 +20,9 @@ let lastGoogleConfigWarning = null;
 function configureGoogleSignIn() {
   if (!GoogleSignin || isGoogleConfigured) return true;
 
-  const webClientId =
-    Config.GOOGLE_WEB_CLIENT_ID || process.env.GOOGLE_WEB_CLIENT_ID ||
-    'YOUR_GOOGLE_WEB_CLIENT_ID';
+  const webClientId = Config.GOOGLE_WEB_CLIENT_ID || '';
 
-  if (!webClientId || webClientId.includes('YOUR_')) {
+  if (!webClientId) {
     const warningKey = 'GOOGLE_WEB_CLIENT_ID missing in env config';
     if (warningKey !== lastGoogleConfigWarning) {
       console.warn('[MedScan] GOOGLE_WEB_CLIENT_ID missing in env config');
