@@ -13,7 +13,6 @@ import {
   Platform,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
-import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { User, Calendar, Phone } from 'lucide-react-native';
 import { useAuth } from '@/context/AuthContext';
@@ -21,7 +20,6 @@ import { colors } from '@/theme/colors';
 import { supabase } from '@/lib/supabase';
 
 export default function CompleteProfileScreen() {
-  const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const { user, signInStub } = useAuth();
 
@@ -47,9 +45,9 @@ export default function CompleteProfileScreen() {
     try {
       setLoading(true);
 
-      // Real Supabase user
+      // Store profile data in Supabase Auth user_metadata
       if (user?.id && !String(user.id).startsWith('local-')) {
-        const { error } = await supabase.auth.updateUser({
+        const { data, error } = await supabase.auth.updateUser({
           data: {
             full_name: name.trim(),
             age: Number(age),
@@ -58,17 +56,29 @@ export default function CompleteProfileScreen() {
           },
         });
         if (error) throw error;
+
+        signInStub({
+          ...data?.user,
+          name: name.trim(),
+          age: Number(age),
+          phone: phone.trim(),
+          profileComplete: true,
+          user_metadata: {
+            ...(data?.user?.user_metadata || {}),
+            full_name: name.trim(),
+            age: Number(age),
+            phone: phone.trim(),
+            profileComplete: true,
+          },
+        });
+      } else {
+        signInStub({
+          name: name.trim(),
+          age: Number(age),
+          phone: phone.trim(),
+          profileComplete: true,
+        });
       }
-
-      // Local state update
-      signInStub({
-        name: name.trim(),
-        age: Number(age),
-        phone: phone.trim(),
-        profileComplete: true,
-      });
-
-      navigation.reset({ index: 0, routes: [{ name: 'Main' }] });
     } catch (error) {
       Alert.alert('Error', error?.message || 'Could not save profile');
     } finally {
@@ -95,7 +105,6 @@ export default function CompleteProfileScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* Logo */}
           <Image
             source={require('../../../assets/images/logo.png')}
             style={styles.logo}
@@ -107,9 +116,7 @@ export default function CompleteProfileScreen() {
             Tell us a bit about yourself so MedScan can personalize your experience
           </Text>
 
-          {/* White Card */}
           <View style={styles.card}>
-            {/* Name */}
             <Text style={styles.label}>Full Name</Text>
             <View style={styles.inputRow}>
               <User size={18} color={colors.textMuted} style={styles.inputIcon} />
@@ -123,7 +130,6 @@ export default function CompleteProfileScreen() {
               />
             </View>
 
-            {/* Age */}
             <Text style={[styles.label, { marginTop: 16 }]}>Age</Text>
             <View style={styles.inputRow}>
               <Calendar size={18} color={colors.textMuted} style={styles.inputIcon} />
@@ -138,7 +144,6 @@ export default function CompleteProfileScreen() {
               />
             </View>
 
-            {/* Phone */}
             <Text style={[styles.label, { marginTop: 16 }]}>Phone Number</Text>
             <View style={styles.inputRow}>
               <Phone size={18} color={colors.textMuted} style={styles.inputIcon} />
@@ -153,7 +158,6 @@ export default function CompleteProfileScreen() {
               />
             </View>
 
-            {/* Continue Button */}
             <Pressable
               style={[styles.saveBtn, loading && { opacity: 0.7 }]}
               onPress={handleSave}

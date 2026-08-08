@@ -1,7 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import RNFS from 'react-native-fs';
 
-const STORAGE_KEY = '@medscan/scans';
+const STORAGE_KEY_PREFIX = '@medscan/scans_';
+
+function getStorageKey(userId) {
+  if (!userId) return `${STORAGE_KEY_PREFIX}guest`;
+  return `${STORAGE_KEY_PREFIX}${userId}`;
+}
 
 async function copyImagePermanent(imageUri) {
   if (!imageUri) return null;
@@ -23,9 +28,10 @@ async function copyImagePermanent(imageUri) {
   }
 }
 
-export async function getAllScans() {
+export async function getAllScans(userId) {
   try {
-    const raw = await AsyncStorage.getItem(STORAGE_KEY);
+    const key = getStorageKey(userId);
+    const raw = await AsyncStorage.getItem(key);
     const list = raw ? JSON.parse(raw) : [];
     return Array.isArray(list) ? list : [];
   } catch {
@@ -33,7 +39,7 @@ export async function getAllScans() {
   }
 }
 
-export async function saveScan({ imageUri, result, rawText }) {
+export async function saveScan({ imageUri, result, rawText, userId }) {
   const permanentUri = await copyImagePermanent(imageUri);
   const id = `scan_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
@@ -57,20 +63,22 @@ export async function saveScan({ imageUri, result, rawText }) {
     price: result?.price || null,
   };
 
-  const list = await getAllScans();
+  const list = await getAllScans(userId);
   const next = [item, ...list].slice(0, 100); // max 100
-  await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+  const key = getStorageKey(userId);
+  await AsyncStorage.setItem(key, JSON.stringify(next));
   return item;
 }
 
-export async function getRecentScans(limit = 5) {
-  const list = await getAllScans();
+export async function getRecentScans(limit = 5, userId) {
+  const list = await getAllScans(userId);
   return list.slice(0, limit);
 }
 
-export async function deleteScan(id) {
-  const list = await getAllScans();
+export async function deleteScan(id, userId) {
+  const list = await getAllScans(userId);
   const next = list.filter((s) => s.id !== id);
-  await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+  const key = getStorageKey(userId);
+  await AsyncStorage.setItem(key, JSON.stringify(next));
   return next;
 }

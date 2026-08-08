@@ -3,7 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import { colors } from '@/theme/colors';
 
 /** Base elevated card used across Home, History, Result, etc. */
-export default function Card({ children, style, className, ...rest }) {
+export function Card({ children, style, className, ...rest }) {
   return (
     <View
       style={[styles.card, style]}
@@ -13,6 +13,8 @@ export default function Card({ children, style, className, ...rest }) {
     </View>
   );
 }
+
+export default Card;
 
 const styles = StyleSheet.create({
   card: {

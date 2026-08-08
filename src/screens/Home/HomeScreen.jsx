@@ -6,16 +6,11 @@ import {
   ScrollView,
   RefreshControl,
   StyleSheet,
+  Image,
 } from 'react-native';
-import {
-  ScanLine,
-  Lightbulb,
-  Clock,
-  ChevronRight,
-  User2,
-} from 'lucide-react-native';
+import { ScanLine, Lightbulb, Clock, ChevronRight, User2 } from 'lucide-react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import ScreenContainer from '@/components/ScreenContainer';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Card from '@/components/Card';
 import DisclaimerBanner from '@/components/DisclaimerBanner';
 import { useLanguage } from '@/context/LanguageContext';
@@ -27,6 +22,7 @@ const DAILY_FREE_LIMIT = 5;
 
 export default function HomeScreen() {
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
   const { t } = useLanguage();
   const { user } = useAuth();
   const [refreshing, setRefreshing] = useState(false);
@@ -69,18 +65,35 @@ export default function HomeScreen() {
     });
   };
 
-  const displayName =
-    user?.user_metadata?.full_name ||
-    user?.user_metadata?.name ||
-    user?.name ||
-    user?.email?.split('@')[0] ||
-    'there';
-
   return (
-    <ScreenContainer edges={['top']}>
+    <View style={styles.container}>
+      {/* Green header */}
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
+        <View style={styles.headerRow}>
+          <View>
+            <Text style={styles.greeting}>{t.home.greeting},</Text>
+            <Text style={styles.userName}>{user?.name || user?.email?.split('@')[0] || 'there'}</Text>
+          </View>
+          <View style={styles.headerRight}>
+            <Image
+              source={require('../../../assets/images/logo.png')}
+              style={styles.headerLogo}
+              resizeMode="contain"
+            />
+            <Pressable
+              style={styles.avatarBtn}
+              onPress={() => navigation.navigate('Profile')}
+            >
+              <User2 size={20} color={colors.primary} />
+            </Pressable>
+          </View>
+        </View>
+      </View>
+
       <ScrollView
-        showsVerticalScrollIndicator={false}
+        style={styles.cardWrapper}
         contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -89,54 +102,40 @@ export default function HomeScreen() {
           />
         }
       >
-        <View style={styles.headerRow}>
-          <View style={styles.headerTextWrap}>
-            <Text style={styles.greetingText}>{t.home.greeting},</Text>
-            <Text style={styles.userName}>{displayName}</Text>
-          </View>
+        <View style={styles.card}>
+          {/* Scan CTA */}
           <Pressable
-            style={styles.avatarButton}
-            onPress={() => navigation.navigate('Profile')}
+            onPress={() => navigation.navigate('Camera')}
+            style={styles.scanButton}
           >
-            <User2 size={20} color={colors.primary} />
+            <View style={styles.scanIconContainer}>
+              <ScanLine size={28} color="#FFFFFF" />
+            </View>
+            <Text style={styles.scanTitle}>{t.home.scanCta}</Text>
+            <Text style={styles.scanSubtitle}>{t.home.scanSubtitle}</Text>
           </Pressable>
-        </View>
 
-        <Pressable
-          onPress={() => navigation.navigate('Camera')}
-          style={styles.scanButton}
-        >
-          <View style={styles.scanIconContainer}>
-            <ScanLine size={30} color="#FFFFFF" />
-          </View>
-          <Text style={styles.scanTitle}>{t.home.scanCta}</Text>
-          <Text style={styles.scanSubtitle}>{t.home.scanSubtitle}</Text>
-        </Pressable>
+          <Text style={styles.scanStatus}>
+            {scansLeft} {t.home.scansLeft} · {t.home.upgrade}
+          </Text>
 
-        <Text style={styles.scanStatusText}>
-          {scansLeft} {t.home.scansLeft} · {t.home.upgrade}
-        </Text>
-
-        <View style={styles.section}>
+          {/* Tips */}
           <Text style={styles.sectionTitle}>{t.home.quickTips}</Text>
-          <View style={styles.quickTipsList}>
-            {tips.map((tip, idx) => (
-              <Card key={idx} style={styles.quickTipCard}>
-                <View style={styles.tipIconContainer}>
-                  <Lightbulb size={16} color={colors.primary} />
-                </View>
-                <Text style={styles.tipText}>{tip}</Text>
-              </Card>
-            ))}
-          </View>
-        </View>
+          {tips.map((tip, idx) => (
+            <Card key={idx} style={styles.tipCard}>
+              <View style={styles.tipIcon}>
+                <Lightbulb size={16} color={colors.primary} />
+              </View>
+              <Text style={styles.tipText}>{tip}</Text>
+            </Card>
+          ))}
 
-        <View style={styles.section}>
-          <View style={styles.sectionHeaderRow}>
+          {/* Recent */}
+          <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>{t.home.recentScan}</Text>
             {recentScans.length > 0 && (
               <Pressable
-                style={styles.viewAllButton}
+                style={styles.viewAll}
                 onPress={() => navigation.navigate('History')}
               >
                 <Text style={styles.viewAllText}>{t.home.viewAll}</Text>
@@ -146,23 +145,19 @@ export default function HomeScreen() {
           </View>
 
           {recentScans.length === 0 ? (
-            <Card style={styles.emptyStateCard}>
-              <View style={styles.recentIconContainer}>
-                <Clock size={20} color={colors.primary} />
-              </View>
-              <Text style={styles.recentTitle}>{t.home.noRecentScan}</Text>
-              <Text style={styles.emptyStateSubtitle}>
-                {t.home.noRecentScanSubtitle}
-              </Text>
+            <Card style={styles.emptyCard}>
+              <Clock size={22} color={colors.primary} />
+              <Text style={styles.emptyTitle}>{t.home.noRecentScan}</Text>
+              <Text style={styles.emptySub}>{t.home.noRecentScanSubtitle}</Text>
             </Card>
           ) : (
             recentScans.map((scan) => (
               <Pressable key={scan.id} onPress={() => openScan(scan)}>
-                <Card style={[styles.recentCard, { marginBottom: 10 }]}>
-                  <View style={styles.recentIconContainer}>
-                    <Clock size={20} color={colors.primary} />
+                <Card style={styles.recentCard}>
+                  <View style={styles.recentIcon}>
+                    <Clock size={18} color={colors.primary} />
                   </View>
-                  <View style={styles.recentDetails}>
+                  <View style={{ flex: 1 }}>
                     <Text style={styles.recentTitle} numberOfLines={1}>
                       {scan.name}
                     </Text>
@@ -180,148 +175,156 @@ export default function HomeScreen() {
               </Pressable>
             ))
           )}
-        </View>
 
-        <View style={styles.disclaimerWrapper}>
-          <DisclaimerBanner />
+          <View style={{ marginTop: 20 }}>
+            <DisclaimerBanner />
+          </View>
         </View>
       </ScrollView>
-    </ScreenContainer>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  scrollContent: { paddingBottom: 32, paddingTop: 4 },
+  container: { flex: 1, backgroundColor: '#F7F9F9' },
+  header: {
+    backgroundColor: colors.primaryDark,
+    paddingHorizontal: 24,
+    paddingBottom: 50,
+    borderBottomLeftRadius: 40,
+    borderBottomRightRadius: 40,
+  },
   headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  greeting: { color: 'rgba(255,255,255,0.8)', fontSize: 14 },
+  userName: {
+    color: '#FFFFFF',
+    fontSize: 22,
+    fontWeight: '700',
+    marginTop: 2,
+  },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  headerLogo: { width: 48, height: 48, borderRadius: 12 },
+  avatarBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cardWrapper: { flex: 1, marginTop: -32 },
+  scrollContent: { paddingBottom: 32 },
+  card: {
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: 16,
+    borderRadius: 28,
+    paddingHorizontal: 18,
+    paddingTop: 22,
+    paddingBottom: 22,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.08,
+    shadowRadius: 20,
+    elevation: 6,
+  },
+  scanButton: {
+    borderRadius: 22,
+    backgroundColor: colors.coral,
+    paddingVertical: 24,
+    alignItems: 'center',
+  },
+  scanIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
+  scanTitle: { color: '#fff', fontSize: 18, fontWeight: '700' },
+  scanSubtitle: { color: 'rgba(255,255,255,0.85)', fontSize: 12, marginTop: 4 },
+  scanStatus: {
+    color: colors.textMuted,
+    fontSize: 12,
+    textAlign: 'center',
+    marginTop: 12,
+    marginBottom: 8,
+  },
+  sectionTitle: {
+    color: colors.textDark || '#1F2937',
+    fontSize: 16,
+    fontWeight: '700',
+    marginTop: 16,
+    marginBottom: 10,
+  },
+  sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginTop: 8,
   },
-  headerTextWrap: { flex: 1, marginRight: 12 },
-  greetingText: { color: colors.textMuted, fontSize: 14 },
-  userName: {
-    color: colors.textDark,
-    fontSize: 20,
-    fontWeight: '700',
-    marginTop: 2,
-  },
-  avatarButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.mint,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  scanButton: {
-    marginTop: 24,
-    borderRadius: 24,
-    backgroundColor: colors.coral,
-    paddingHorizontal: 24,
-    paddingVertical: 28,
-    alignItems: 'center',
-    shadowColor: '#FF7A59',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.25,
-    shadowRadius: 20,
-    elevation: 6,
-  },
-  scanIconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
-  },
-  scanTitle: { color: colors.white, fontSize: 18, fontWeight: '700' },
-  scanSubtitle: {
-    color: 'rgba(255,255,255,0.85)',
-    fontSize: 12,
-    marginTop: 4,
-  },
-  scanStatusText: {
-    color: colors.textMuted,
-    fontSize: 12,
-    textAlign: 'center',
-    marginTop: 12,
-  },
-  section: { marginTop: 28 },
-  sectionHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  sectionTitle: {
-    color: colors.textDark,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  quickTipsList: { gap: 12 },
-  quickTipCard: {
+  tipCard: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 12,
-    paddingVertical: 14,
-    paddingHorizontal: 14,
+    marginBottom: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
   },
-  tipIconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.mint,
+  tipIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.mint || '#E6F5F2',
     alignItems: 'center',
     justifyContent: 'center',
   },
   tipText: {
     flex: 1,
-    color: colors.textDark,
+    color: colors.textDark || '#1F2937',
     fontSize: 14,
     lineHeight: 20,
-    paddingTop: 6,
+    paddingTop: 4,
   },
-  viewAllButton: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  viewAllText: {
-    color: colors.primary,
-    fontSize: 12,
-    fontWeight: '600',
-  },
+  viewAll: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  viewAllText: { color: colors.primary, fontSize: 12, fontWeight: '600' },
   recentCard: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    paddingVertical: 14,
-    paddingHorizontal: 14,
+    marginBottom: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
   },
-  emptyStateCard: { alignItems: 'center', paddingVertical: 32 },
-  recentIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
-    backgroundColor: colors.mint,
+  recentIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: colors.mint || '#E6F5F2',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  recentDetails: { flex: 1 },
   recentTitle: {
-    color: colors.textDark,
+    color: colors.textDark || '#1F2937',
     fontSize: 14,
     fontWeight: '600',
   },
-  recentDate: {
-    color: colors.textMuted,
-    fontSize: 12,
-    marginTop: 2,
+  recentDate: { color: colors.textMuted, fontSize: 12, marginTop: 2 },
+  emptyCard: { alignItems: 'center', paddingVertical: 28, gap: 6 },
+  emptyTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.textDark || '#1F2937',
   },
-  emptyStateSubtitle: {
-    color: colors.textMuted,
+  emptySub: {
     fontSize: 12,
-    marginTop: 4,
+    color: colors.textMuted,
     textAlign: 'center',
-    paddingHorizontal: 24,
+    paddingHorizontal: 20,
   },
-  disclaimerWrapper: { marginTop: 28 },
 });

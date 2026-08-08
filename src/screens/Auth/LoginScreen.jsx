@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -14,13 +14,11 @@ import {
   Modal,
 } from 'react-native';
 import { Mail, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react-native';
-import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/context/AuthContext';
 import { colors } from '@/theme/colors';
 
 export default function LoginScreen() {
-  const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const {
     signInWithEmail,
@@ -28,9 +26,8 @@ export default function LoginScreen() {
     resetPasswordForEmail,
     signInWithGoogle,
     signInWithFacebook,
-    isAuthenticated,
+    signOut,
     loading: authLoading,
-    user,
   } = useAuth();
 
   const [isSignUp, setIsSignUp] = useState(false);
@@ -41,27 +38,9 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [loadingGoogle, setLoadingGoogle] = useState(false);
   const [loadingFacebook, setLoadingFacebook] = useState(false);
-  const [pendingAuthRedirect, setPendingAuthRedirect] = useState(false);
   const [forgotPasswordVisible, setForgotPasswordVisible] = useState(false);
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotLoading, setForgotLoading] = useState(false);
-
-  useEffect(() => {
-    if (!pendingAuthRedirect || authLoading || !isAuthenticated) return;
-
-    const profileDone =
-      user?.profileComplete || user?.user_metadata?.profileComplete;
-
-    navigation.reset({
-      index: 0,
-      routes: [{ name: profileDone ? 'Main' : 'CompleteProfile' }],
-    });
-    setPendingAuthRedirect(false);
-  }, [pendingAuthRedirect, authLoading, isAuthenticated, user, navigation]);
-
-  const triggerAuthRedirect = () => {
-    setPendingAuthRedirect(true);
-  };
 
   const openForgotPassword = () => {
     setForgotEmail(email.trim());
@@ -112,18 +91,38 @@ export default function LoginScreen() {
       setLoading(true);
       if (isSignUp) {
         const result = await signUpWithEmail(email, password);
-        const hasSession = !!result?.data?.session;
-        if (!hasSession) {
-          Alert.alert(
-            'Check your email',
-            'Please confirm your email address before signing in.',
-          );
-          return;
+
+        // Signup ke baad auto-login mat karo.
+        // Agar Supabase ne session de diya to sign out kar do
+        // taake user login screen pe rahe.
+        if (result?.data?.session) {
+          try {
+            await signOut();
+          } catch (_) {}
         }
-      } else {
-        await signInWithEmail(email, password);
+
+        Alert.alert(
+          'Account Created',
+          result?.data?.session
+            ? 'Your account has been created. Please log in with your email and password.'
+            : 'Please confirm your email address, then log in.',
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                setIsSignUp(false);
+                setPassword('');
+                setConfirmPassword('');
+              },
+            },
+          ],
+        );
+        return;
       }
-      triggerAuthRedirect();
+
+      // Normal login → RootNavigator automatically
+      // CompleteProfile (agar incomplete) ya Main pe le jayega
+      await signInWithEmail(email, password);
     } catch (error) {
       Alert.alert(
         isSignUp ? 'Sign Up Failed' : 'Login Failed',
@@ -139,7 +138,6 @@ export default function LoginScreen() {
       setLoadingGoogle(true);
       const result = await signInWithGoogle();
       if (result?.cancelled) return;
-      triggerAuthRedirect();
     } catch (error) {
       Alert.alert(
         'Google Sign-In Failed',
@@ -155,7 +153,6 @@ export default function LoginScreen() {
       setLoadingFacebook(true);
       const result = await signInWithFacebook();
       if (result?.cancelled) return;
-      triggerAuthRedirect();
     } catch (error) {
       Alert.alert(
         'Facebook Sign-In Failed',
@@ -176,7 +173,6 @@ export default function LoginScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Top Green Header + Logo */}
       <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
         <View style={styles.headerRow}>
           <View>
@@ -196,7 +192,6 @@ export default function LoginScreen() {
         </View>
       </View>
 
-      {/* White Form Card */}
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.cardWrapper}
@@ -206,7 +201,6 @@ export default function LoginScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* Email */}
           <Text style={styles.label}>Email Address</Text>
           <View style={styles.inputContainer}>
             <Mail size={18} color={colors.textMuted} style={styles.inputIcon} />
@@ -222,7 +216,6 @@ export default function LoginScreen() {
             />
           </View>
 
-          {/* Password */}
           <Text style={[styles.label, { marginTop: 18 }]}>Password</Text>
           <View style={styles.inputContainer}>
             <Lock size={18} color={colors.textMuted} style={styles.inputIcon} />
@@ -246,7 +239,6 @@ export default function LoginScreen() {
             </Pressable>
           </View>
 
-          {/* Confirm Password (Sign Up only) */}
           {isSignUp && (
             <>
               <Text style={[styles.label, { marginTop: 18 }]}>
@@ -270,14 +262,12 @@ export default function LoginScreen() {
             </>
           )}
 
-          {/* Forgot Password (Login only) */}
           {!isSignUp && (
             <Pressable style={styles.forgotBtn} onPress={openForgotPassword}>
               <Text style={styles.forgotText}>Forgot Password?</Text>
             </Pressable>
           )}
 
-          {/* Main Button */}
           <Pressable
             style={[
               styles.loginBtn,
@@ -299,16 +289,13 @@ export default function LoginScreen() {
             )}
           </Pressable>
 
-          {/* Divider */}
           <View style={styles.dividerRow}>
             <View style={styles.dividerLine} />
             <Text style={styles.dividerText}>OR</Text>
             <View style={styles.dividerLine} />
           </View>
 
-          {/* Small Circular Social Buttons */}
           <View style={styles.socialRow}>
-            {/* Google */}
             <Pressable
               style={[styles.socialCircle, loadingGoogle && { opacity: 0.6 }]}
               onPress={handleGoogle}
@@ -326,7 +313,6 @@ export default function LoginScreen() {
               )}
             </Pressable>
 
-            {/* Facebook */}
             <Pressable
               style={[
                 styles.socialCircle,
@@ -399,7 +385,6 @@ export default function LoginScreen() {
             </View>
           </Modal>
 
-          {/* Toggle Login / Sign Up */}
           <View style={styles.toggleRow}>
             <Text style={styles.toggleText}>
               {isSignUp

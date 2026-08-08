@@ -10,16 +10,16 @@ import {
   Alert,
 } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Clock, Trash2 } from 'lucide-react-native';
-import ScreenContainer from '@/components/ScreenContainer';
 import Card from '@/components/Card';
 import { getAllScans, deleteScan } from '@/lib/scanStorage';
 import { colors } from '@/theme/colors';
+import { useLanguage } from '@/context/LanguageContext';
 
 function formatDate(iso) {
   if (!iso) return '';
-  const d = new Date(iso);
-  return d.toLocaleString(undefined, {
+  return new Date(iso).toLocaleString(undefined, {
     day: 'numeric',
     month: 'short',
     hour: '2-digit',
@@ -34,15 +34,10 @@ function typeLabel(type) {
   return 'Other';
 }
 
-function typeEmoji(type) {
-  if (type === 'report') return '🧪';
-  if (type === 'prescription') return '📄';
-  if (type === 'medicine') return '💊';
-  return '📋';
-}
-
 export default function HistoryScreen() {
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
+  const { t } = useLanguage();
   const [scans, setScans] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -85,91 +80,122 @@ export default function HistoryScreen() {
   };
 
   return (
-    <ScreenContainer edges={['top']}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Scan History</Text>
-        <Text style={styles.subtitle}>{scans.length} saved</Text>
+    <View style={styles.container}>
+      {/* Green header */}
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
+        <View style={styles.headerRow}>
+          <View>
+            <Text style={styles.title}>{t.tabs?.history || 'History'}</Text>
+            <Text style={styles.subtitle}>{scans.length} saved</Text>
+          </View>
+          <Image
+            source={require('../../../assets/images/logo.png')}
+            style={styles.headerLogo}
+            resizeMode="contain"
+          />
+        </View>
       </View>
 
-      <FlatList
-        data={scans}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.list}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={colors.primary}
-          />
-        }
-        ListEmptyComponent={
-          <Card style={styles.emptyCard}>
-            <Clock size={28} color={colors.primary} />
-            <Text style={styles.emptyTitle}>Abhi koi scan nahi</Text>
-            <Text style={styles.emptySub}>
-              Medicine ya report scan karo — yahan save ho jayegi
-            </Text>
-          </Card>
-        }
-        renderItem={({ item }) => {
-          const priceText = item?.price?.approxPkr
-            ? `Rs. ${item.price.approxPkr}`
-            : null;
-
-          return (
-            <Pressable onPress={() => openScan(item)}>
-              <Card style={styles.row}>
-                {item.imageUri ? (
-                  <Image source={{ uri: item.imageUri }} style={styles.thumb} />
-                ) : (
-                  <View style={[styles.thumb, styles.thumbPlaceholder]}>
-                    <Text style={{ fontSize: 22 }}>{typeEmoji(item.type)}</Text>
-                  </View>
-                )}
-
-                <View style={styles.meta}>
-                  <Text style={styles.name} numberOfLines={1}>
-                    {item.name || 'Scan'}
-                  </Text>
-
-                  {!!item.subtitle && (
-                    <Text style={styles.salt} numberOfLines={1}>
-                      {item.subtitle}
-                    </Text>
-                  )}
-
-                  <View style={styles.metaRow}>
-                    <Text style={styles.date}>{formatDate(item.createdAt)}</Text>
-                    <Text style={styles.dot}>·</Text>
-                    <Text style={styles.type}>{typeLabel(item.type)}</Text>
-                  </View>
-
-                  {priceText ? (
-                    <Text style={styles.price}>{priceText}</Text>
-                  ) : null}
-                </View>
-
-                <Pressable
-                  onPress={() => onDelete(item)}
-                  hitSlop={12}
-                  style={styles.deleteBtn}
-                >
-                  <Trash2 size={18} color={colors.danger} />
-                </Pressable>
+      <View style={styles.cardWrapper}>
+        <FlatList
+          data={scans}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.list}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={colors.primary}
+            />
+          }
+          ListEmptyComponent={
+            <View style={styles.card}>
+              <Card style={styles.emptyCard}>
+                <Clock size={28} color={colors.primary} />
+                <Text style={styles.emptyTitle}>Abhi koi scan nahi</Text>
+                <Text style={styles.emptySub}>
+                  Medicine ya report scan karo — yahan save ho jayegi
+                </Text>
               </Card>
-            </Pressable>
-          );
-        }}
-      />
-    </ScreenContainer>
+            </View>
+          }
+          renderItem={({ item, index }) => (
+            <View
+              style={[
+                styles.listItemWrap,
+                index === 0 && styles.firstItem,
+              ]}
+            >
+              <Pressable onPress={() => openScan(item)}>
+                <Card style={styles.row}>
+                  {item.imageUri ? (
+                    <Image source={{ uri: item.imageUri }} style={styles.thumb} />
+                  ) : (
+                    <View style={[styles.thumb, styles.thumbPlaceholder]}>
+                      <Text style={{ fontSize: 20 }}>💊</Text>
+                    </View>
+                  )}
+                  <View style={styles.meta}>
+                    <Text style={styles.name} numberOfLines={1}>
+                      {item.name || 'Scan'}
+                    </Text>
+                    {!!item.subtitle && (
+                      <Text style={styles.salt} numberOfLines={1}>
+                        {item.subtitle}
+                      </Text>
+                    )}
+                    <Text style={styles.date}>
+                      {formatDate(item.createdAt)} · {typeLabel(item.type)}
+                    </Text>
+                  </View>
+                  <Pressable onPress={() => onDelete(item)} hitSlop={12}>
+                    <Trash2 size={18} color={colors.danger} />
+                  </Pressable>
+                </Card>
+              </Pressable>
+            </View>
+          )}
+        />
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  header: { paddingHorizontal: 4, marginBottom: 12, marginTop: 8 },
-  title: { fontSize: 22, fontWeight: '700', color: colors.textDark },
-  subtitle: { marginTop: 2, fontSize: 13, color: colors.textMuted },
-  list: { paddingBottom: 24, gap: 10 },
+  container: { flex: 1, backgroundColor: '#F7F9F9' },
+  header: {
+    backgroundColor: colors.primaryDark,
+    paddingHorizontal: 24,
+    paddingBottom: 50,
+    borderBottomLeftRadius: 40,
+    borderBottomRightRadius: 40,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  title: {
+    color: '#FFFFFF',
+    fontSize: 26,
+    fontWeight: '700',
+  },
+  subtitle: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 13,
+    marginTop: 4,
+  },
+  headerLogo: { width: 52, height: 52, borderRadius: 12 },
+  cardWrapper: { flex: 1, marginTop: -32 },
+  list: { paddingHorizontal: 16, paddingBottom: 32 },
+  firstItem: {},
+  listItemWrap: { marginBottom: 10 },
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 28,
+    padding: 16,
+  },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -178,37 +204,30 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   thumb: {
-    width: 56,
-    height: 56,
+    width: 52,
+    height: 52,
     borderRadius: 12,
     backgroundColor: '#E6F5F2',
   },
   thumbPlaceholder: { alignItems: 'center', justifyContent: 'center' },
   meta: { flex: 1 },
-  name: { fontSize: 15, fontWeight: '600', color: colors.textDark },
+  name: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.textDark || '#1F2937',
+  },
   salt: { marginTop: 2, fontSize: 12, color: colors.textMuted },
-  metaRow: {
-    marginTop: 4,
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-  },
-  date: { fontSize: 12, color: colors.textMuted },
-  dot: { marginHorizontal: 6, color: colors.textMuted },
-  type: { fontSize: 12, color: colors.primary, fontWeight: '600' },
-  price: {
-    marginTop: 4,
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.textDark,
-  },
-  deleteBtn: { padding: 8 },
+  date: { marginTop: 4, fontSize: 12, color: colors.textMuted },
   emptyCard: { alignItems: 'center', paddingVertical: 40, gap: 8 },
-  emptyTitle: { fontSize: 16, fontWeight: '600', color: colors.textDark },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.textDark || '#1F2937',
+  },
   emptySub: {
     fontSize: 13,
     color: colors.textMuted,
     textAlign: 'center',
-    paddingHorizontal: 24,
+    paddingHorizontal: 20,
   },
 });

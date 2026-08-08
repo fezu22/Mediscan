@@ -16,6 +16,7 @@ import RNFS from 'react-native-fs';
 import Config from 'react-native-config';
 import { ChevronLeft, ChevronDown, ChevronUp } from 'lucide-react-native';
 import { saveScan } from '@/lib/scanStorage';
+import { useAuth } from '@/context/AuthContext';
 import VoiceBotModal from '@/components/VoiceBotModal';
 import { colors } from '@/theme/colors';
 
@@ -68,6 +69,7 @@ export default function ResultScreen() {
   const navigation = useNavigation();
   const { imageUri, scanMode } = route.params || {};
   const savedScan = route.params?.savedScan;
+  const { user } = useAuth();
 
   const [loading, setLoading] = useState(!savedScan);
   const [error, setError] = useState(null);
@@ -203,10 +205,10 @@ If NOT medical:
       try {
         const parsed = JSON.parse(cleaned);
         setResult(parsed);
-        await saveScan({ imageUri: uri, result: parsed });
+        await saveScan({ imageUri: uri, result: parsed, userId: user?.id });
       } catch {
         setRawText(text);
-        await saveScan({ imageUri: uri, result: null, rawText: text });
+        await saveScan({ imageUri: uri, result: null, rawText: text, userId: user?.id });
       }
     } catch (err) {
       console.log('Analysis error:', err);

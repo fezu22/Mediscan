@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { Linking } from 'react-native';
@@ -89,7 +89,6 @@ export function AuthProvider({ children }) {
       }
     };
 
-    // Initial session
     const boot = async () => {
       try {
         const timeout = new Promise((resolve) =>
@@ -114,7 +113,6 @@ export function AuthProvider({ children }) {
 
     boot();
 
-    // Auth state listener
     const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
       if (!mounted) return;
       setSession(session);
@@ -122,9 +120,8 @@ export function AuthProvider({ children }) {
       setLoading(false);
     });
 
-    // Deep linking
     const linkingSub = Linking.addEventListener('url', ({ url }) => handleIncomingUrl(url));
-    const getInitialUrl = Linking.getInitialURL().then(handleIncomingUrl);
+    Linking.getInitialURL().then(handleIncomingUrl);
 
     return () => {
       mounted = false;
@@ -134,12 +131,27 @@ export function AuthProvider({ children }) {
   }, []);
 
   const signInStub = (partial = {}) => {
-    setUser((prev) => ({
-      id: prev?.id ?? 'local-stub-user',
-      profileComplete: false,
-      ...prev,
-      ...partial,
-    }));
+    setUser((prev) => {
+      const next = {
+        id: prev?.id ?? 'local-stub-user',
+        profileComplete: false,
+        ...prev,
+        ...partial,
+      };
+      if (partial.profileComplete || partial.full_name || partial.name) {
+        next.user_metadata = {
+          ...(prev?.user_metadata || {}),
+          ...(partial.user_metadata || {}),
+          full_name: partial.name || partial.full_name || prev?.user_metadata?.full_name,
+          age: partial.age ?? prev?.user_metadata?.age,
+          phone: partial.phone ?? prev?.user_metadata?.phone,
+          profileComplete:
+            partial.profileComplete ?? prev?.user_metadata?.profileComplete ?? false,
+        };
+        next.profileComplete = next.user_metadata.profileComplete;
+      }
+      return next;
+    });
   };
 
   const signInWithEmail = async (email, password) => {
