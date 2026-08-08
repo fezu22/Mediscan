@@ -17,23 +17,54 @@ import Config from 'react-native-config';
 import { ChevronLeft, ChevronDown, ChevronUp } from 'lucide-react-native';
 import { saveScan } from '@/lib/scanStorage';
 import { useAuth } from '@/context/AuthContext';
+import { useLanguage } from '@/context/LanguageContext';
 import VoiceBotModal from '@/components/VoiceBotModal';
 import { colors } from '@/theme/colors';
 
 const GEMINI_MODEL = 'gemini-3.1-flash-lite';
 
-const MEDICAL_SYSTEM_RULES = `
-You are MedScan assistant for Pakistan users — ONLY medicines, lab reports, prescriptions.
+const LANG_NAMES = {
+  en: 'English',
+  ur: 'Urdu',
+  ar: 'Arabic',
+  hi: 'Hindi',
+  ps: 'Pashto',
+  pa: 'Punjabi',
+  sd: 'Sindhi',
+  fa: 'Persian',
+  tr: 'Turkish',
+  bn: 'Bengali',
+  zh: 'Chinese',
+  es: 'Spanish',
+  fr: 'French',
+  de: 'German',
+  pt: 'Portuguese',
+  ru: 'Russian',
+  id: 'Indonesian',
+  ja: 'Japanese',
+  ko: 'Korean',
+  th: 'Thai',
+};
+
+function buildSystemRules(langCode) {
+  const langName = LANG_NAMES[langCode] || 'English';
+  return `
+You are MedScan — a helpful medical scanner assistant.
+You ONLY explain medicines, lab reports, and prescriptions in simple language.
+
 STRICT RULES:
-1. Only medical topics. Non-medical → "Main sirf medicine aur lab report se related sawalon ka jawab de sakta hoon."
-2. NEVER invent exact dosage not on the package. If dosage not visible, say "package par check karein".
-3. NEVER diagnose or prescribe new treatment.
-4. Do NOT say you are AI/chatbot.
-5. Do NOT use asterisks (*) or markdown stars in answers.
-6. Prices: approximate retail in Pakistan (PKR). Say "approx" — prices change by city/pharmacy.
-7. Alternatives: same/similar salt (generic) from other common brands in Pakistan when known. If unsure, say so.
-8. Language: simple English + Urdu mix, short clear sentences.
+1. Only medical content. Non-medical image → set type "unknown".
+2. NEVER invent dosage. If dose not clearly written on pack, write that user should confirm from package/doctor.
+3. NEVER diagnose disease or prescribe new treatment.
+4. Do NOT say you are AI, chatbot, or Gemini.
+5. No markdown, no asterisks (*), no bullet symbols in text values.
+6. Prices: approximate Pakistan retail in PKR. Always say "approx".
+7. Alternatives: only same/similar salt brands common in Pakistan. Max 3. If unsure → empty array.
+8. LANGUAGE: Write ALL text fields (about, notes, howItWorks, whyInMedicine, howToUse, and every sentence) in ${langName} only. Simple clear ${langName}. Brand names can stay as written on pack. Do not mix other languages.
+9. about field: 2-3 short useful sentences only. No extra talk.
+10. Keep every field focused and practical for a normal user.
 `;
+}
 
 function FormattedText({ text, style, boldStyle }) {
   if (!text) return null;
@@ -70,6 +101,8 @@ export default function ResultScreen() {
   const { imageUri, scanMode } = route.params || {};
   const savedScan = route.params?.savedScan;
   const { user } = useAuth();
+  const { language } = useLanguage();
+  const systemRules = buildSystemRules(language);
 
   const [loading, setLoading] = useState(!savedScan);
   const [error, setError] = useState(null);
@@ -125,49 +158,48 @@ export default function ResultScreen() {
 
       const modeHint =
         scanMode === 'report'
-          ? 'User selected REPORT mode — expect lab report or prescription.'
-          : 'User selected MEDICINE mode — expect medicine pack/strip/bottle.';
+          ? 'User selected REPORT / TEST mode. Expect lab report, blood test, urine, pathology, X-ray, or prescription. If image is clearly a medicine pack/strip/bottle → set type "mismatch_medicine".'
+          : 'User selected MEDICINE mode. Expect medicine pack, strip, bottle or blister. If image is clearly a lab report / test / prescription → set type "mismatch_report".';
 
-      const prompt = `${MEDICAL_SYSTEM_RULES}
+      const prompt = `${systemRules}
 
 ${modeHint}
 
-Look at this image (medicine package, strip, bottle, prescription, or lab report).
+Look carefully at this image.
 
-Return ONLY valid JSON (no markdown fences, no asterisks):
+Return ONLY valid JSON (no markdown, no code fences):
 {
-  "type": "medicine" | "report" | "prescription" | "unknown",
-  "name": "brand name",
+  "type": "medicine" | "report" | "prescription" | "unknown" | "mismatch_medicine" | "mismatch_report",
+  "name": "brand name or report title",
   "subtitle": "salt / generic name OR report type",
-  "manufacturer": "company name or empty",
+  "manufacturer": "company name or empty string",
   "confidence": 0-100,
-  "about": "2-4 short sentences what this is",
-  "onPackage": ["only text actually visible on image"],
-  "notes": ["important cautions if known for this medicine, else empty"],
-  "formula": "salt composition e.g. Paracetamol 500mg — plain text",
-  "howItWorks": "simple explanation how this formula works in the body",
-  "whyInMedicine": "why this ingredient is put in this medicine / what problem it targets",
-  "howToUse": "general how this type of medicine is usually used (tablet/syrup etc). If exact dose not on pack, say package/doctor se confirm karein. Do not invent dose.",
+  "about": "2-3 short clear sentences only",
+  "onPackage": ["only text actually visible on the image"],
+  "notes": ["important practical cautions if known, else empty array"],
+  "formula": "salt composition e.g. Paracetamol 500mg or empty",
+  "howItWorks": "simple how this works in body (medicine only) or empty",
+  "whyInMedicine": "what problem this targets (medicine only) or empty",
+  "howToUse": "general use info. Never invent exact dose. Say package/doctor se confirm karein if needed.",
   "alternatives": [
     {
-      "name": "other brand with same/similar salt",
+      "name": "other brand same/similar salt",
       "company": "company",
-      "priceApproxPkr": "e.g. 80-120"
+      "priceApproxPkr": "80-120"
     }
   ],
   "price": {
-    "approxPkr": "e.g. 90-150 per pack",
-    "note": "approx Pakistan retail; pharmacy/city se farq ho sakta hai"
+    "approxPkr": "90-150 per pack",
+    "note": "approx Pakistan retail"
   }
 }
 
-Rules for alternatives:
-- Same salt (generic) brands common in Pakistan when you know them.
-- 2 to 4 alternatives max. If unknown, use empty array [].
-- priceApproxPkr always as string range.
-
-If NOT medical:
-- type unknown, name "Medical item nahi mili", empty arrays, null-like empty strings for extra fields.
+Extra rules:
+- If image is blurry, dark, unreadable or not medical → type "unknown", name "Image issue — clear photo chahiye".
+- If user chose Medicine but image is report/test → type "mismatch_report".
+- If user chose Report but image is medicine → type "mismatch_medicine".
+- Keep about, notes, howToUse short and useful. No repeated or filler text.
+- alternatives max 3 items. Empty array if unknown.
 `;
 
       const response = await fetch(
@@ -204,15 +236,51 @@ If NOT medical:
       const cleaned = text.replace(/```json|```/g, '').trim();
       try {
         const parsed = JSON.parse(cleaned);
+
+        if (parsed.type === 'mismatch_report') {
+          setError(
+            'Yeh image Lab Report / Test lag rahi hai.\n\nAap ne Medicine select kiya tha. Sahi result ke liye peeche jaake "Lab Report" choose karein aur dobara scan karein.',
+          );
+          setResult(null);
+          return;
+        }
+        if (parsed.type === 'mismatch_medicine') {
+          setError(
+            'Yeh image Medicine pack/strip lag rahi hai.\n\nAap ne Report / Test select kiya tha. Sahi result ke liye peeche jaake "Medicine" choose karein aur dobara scan karein.',
+          );
+          setResult(null);
+          return;
+        }
+
+        if (
+          parsed.type === 'unknown' ||
+          (parsed.confidence != null && parsed.confidence < 35) ||
+          (parsed.name &&
+            String(parsed.name).toLowerCase().includes('image issue'))
+        ) {
+          setError(
+            'Image issue — photo clear nahi hai ya medical item detect nahi hua.\n\nBehtar lighting mein seedha aur clear photo lein, phir dobara upload karein.',
+          );
+          setResult(null);
+          return;
+        }
+
         setResult(parsed);
         await saveScan({ imageUri: uri, result: parsed, userId: user?.id });
       } catch {
         setRawText(text);
-        await saveScan({ imageUri: uri, result: null, rawText: text, userId: user?.id });
+        await saveScan({
+          imageUri: uri,
+          result: null,
+          rawText: text,
+          userId: user?.id,
+        });
       }
     } catch (err) {
       console.log('Analysis error:', err);
-      setError('Analysis fail ho gaya. Internet check karein.');
+      setError(
+        'Analysis fail ho gaya. Internet check karein ya thodi der baad dobara try karein.',
+      );
     } finally {
       setLoading(false);
     }
@@ -231,14 +299,14 @@ If NOT medical:
         ? JSON.stringify(result)
         : rawText || 'No previous scan available.';
 
-      const prompt = `${MEDICAL_SYSTEM_RULES}
+      const prompt = `${systemRules}
 
-Previous scan JSON:
+Previous scan result:
 ${context}
 
 User question: ${question}
 
-Stay on medicine/report only. No asterisks. If asking price/alternatives, give approx Pakistan info and say confirm from pharmacy.
+Reply in 2-5 short clear sentences. Only medicine/report related. No asterisks, no filler. If price/alternatives asked — give approx Pakistan info and say pharmacy se confirm karein.
 `;
 
       const response = await fetch(
@@ -285,12 +353,12 @@ Stay on medicine/report only. No asterisks. If asking price/alternatives, give a
           ? 'Medicine'
           : 'Other';
 
-  const aboutTitle = isReport ? 'Report ka matlab' : 'Medicine ke bare mein';
+  const aboutTitle = isReport ? 'Report ka simple matlab' : 'Medicine ke bare mein';
   const packageTitle = isReport ? 'Report par likha hua' : 'Packaging par likha hua';
-  const notesTitle = isReport ? 'Zaroori baatein' : 'Medicine notes';
+  const notesTitle = isReport ? 'Zaroori baatein' : 'Important notes';
   const chatPlaceholder = isReport
-    ? 'Report ke bare mein poochhein...'
-    : 'Medicine ke bare mein poochhein...';
+    ? 'Report ke bare mein sawal poochhein...'
+    : 'Medicine ke bare mein sawal poochhein...';
 
   const displayImage = imageUri || savedScan?.imageUri;
 
@@ -342,13 +410,31 @@ Stay on medicine/report only. No asterisks. If asking price/alternatives, give a
 
         {!loading && error && (
           <View style={styles.errorCard}>
+            <Text style={styles.errorTitle}>Image Issue</Text>
             <Text style={styles.errorText}>{error}</Text>
-            <Pressable
-              onPress={() => imageUri && analyzeImage(imageUri)}
-              style={styles.retryBtn}
-            >
-              <Text style={styles.retryText}>Dobara try karein</Text>
-            </Pressable>
+            <View style={styles.errorActions}>
+              <Pressable
+                onPress={() =>
+                  navigation.navigate('Camera', {
+                    scanType:
+                      scanMode === 'report' ? 'report' : 'medicine',
+                  })
+                }
+                style={styles.retryBtn}
+              >
+                <Text style={styles.retryText}>Nayi image upload karein</Text>
+              </Pressable>
+              {imageUri ? (
+                <Pressable
+                  onPress={() => analyzeImage(imageUri)}
+                  style={styles.secondaryRetryBtn}
+                >
+                  <Text style={styles.secondaryRetryText}>
+                    Isi image se dobara try
+                  </Text>
+                </Pressable>
+              ) : null}
+            </View>
           </View>
         )}
 
@@ -455,23 +541,6 @@ Stay on medicine/report only. No asterisks. If asking price/alternatives, give a
               </Section>
             )}
 
-            {hasPrice && (
-              <Section
-                title="Price (approx)"
-                open={expanded === 'price'}
-                onPress={() => toggle('price')}
-              >
-                <Text style={styles.bodyText}>
-                  Rs. {result.price.approxPkr}
-                </Text>
-                {!!result.price.note && (
-                  <Text style={[styles.medMeta, { marginTop: 6 }]}>
-                    {result.price.note}
-                  </Text>
-                )}
-              </Section>
-            )}
-
             {Array.isArray(result.onPackage) && result.onPackage.length > 0 && (
               <Section
                 title={packageTitle}
@@ -546,7 +615,6 @@ Stay on medicine/report only. No asterisks. If asking price/alternatives, give a
         <View style={{ height: 16 }} />
       </ScrollView>
 
-      {/* Chat bar + Voice bot button */}
       <View style={styles.chatBar}>
         <Pressable
           onPress={() => setVoiceOpen(true)}
@@ -581,14 +649,6 @@ Stay on medicine/report only. No asterisks. If asking price/alternatives, give a
         </Pressable>
       </View>
 
-      <View style={styles.disclaimerBar}>
-        <Text style={styles.disclaimerText}>
-          Yeh maloomat reference ke liye hai. Price aur alternatives approx hain.
-          Koi bhi sehat ka faisla doctor ya pharmacist se confirm karein.
-        </Text>
-      </View>
-
-      {/* Grok-style voice bot overlay */}
       <VoiceBotModal
         visible={voiceOpen}
         onClose={() => setVoiceOpen(false)}
@@ -660,19 +720,44 @@ const styles = StyleSheet.create({
   loadingText: { marginTop: 10, color: colors.textMuted },
   errorCard: {
     backgroundColor: '#FDECEC',
-    borderRadius: 16,
-    padding: 16,
+    borderRadius: 18,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: '#F5C6C6',
   },
-  errorText: { color: colors.danger, fontSize: 14, lineHeight: 20 },
+  errorTitle: {
+    color: colors.danger,
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+  errorText: { color: colors.danger, fontSize: 14, lineHeight: 21 },
+  errorActions: {
+    marginTop: 16,
+    gap: 10,
+  },
   retryBtn: {
-    marginTop: 12,
     alignSelf: 'flex-start',
     backgroundColor: colors.primary,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 11,
+    borderRadius: 12,
   },
-  retryText: { color: '#fff', fontWeight: '600' },
+  retryText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  secondaryRetryBtn: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#fff',
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  secondaryRetryText: {
+    color: colors.primary,
+    fontWeight: '600',
+    fontSize: 13,
+  },
   mainCard: {
     backgroundColor: '#fff',
     borderRadius: 18,
@@ -807,10 +892,4 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  disclaimerBar: {
-    backgroundColor: '#0B7A6D',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-  },
-  disclaimerText: { color: '#fff', fontSize: 11, lineHeight: 16 },
 });
