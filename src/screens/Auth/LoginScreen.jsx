@@ -120,8 +120,8 @@ export default function LoginScreen() {
       showModal({ type: 'error', title: 'Error', message: 'Passwords do not match', showCancel: false });
       return;
     }
-    if (isSignUp && password.length < 6) {
-      showModal({ type: 'error', title: 'Error', message: 'Password must be at least 6 characters', showCancel: false });
+    if (isSignUp && password.length < 8) {
+      showModal({ type: 'error', title: 'Error', message: 'Password must be at least 8 characters', showCancel: false });
       return;
     }
 
