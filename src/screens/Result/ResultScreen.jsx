@@ -107,7 +107,7 @@ export default function ResultScreen() {
   const { imageUri, scanMode } = route.params || {};
   const savedScan = route.params?.savedScan;
   const { user } = useAuth();
-  const { language } = useLanguage();
+  const { language, t } = useLanguage();
   const systemRules = buildSystemRules(language);
 
   const [loading, setLoading] = useState(!savedScan);
@@ -147,7 +147,7 @@ export default function ResultScreen() {
       analyzeImage(imageUri);
     } else {
       setLoading(false);
-      setError('Koi image nahi mili.');
+      setError(t.result?.noImage || 'No image found.');
     }
   }, [imageUri, savedScan]);
 
@@ -162,7 +162,8 @@ export default function ResultScreen() {
       const geminiApiKey = String(Config.GEMINI_API_KEY || '').trim();
       if (!geminiApiKey) {
         setError(
-          'Gemini API key missing. Set GEMINI_API_KEY in .env and rebuild the app.',
+          t.result?.keyMissing ||
+            'Gemini API key missing. Set GEMINI_API_KEY in .env and rebuild the app.',
         );
         setLoading(false);
         return;
@@ -241,13 +242,10 @@ Extra rules:
       );
 
       const data = await response.json();
-      const errorMessage = data?.error?.message || data?.message;
       const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
 
       if (!text) {
-        setError(
-          errorMessage || 'Result nahi mil saka. Dobara try karein.',
-        );
+        setError(data?.error?.message || 'Result nahi mil saka. Dobara try karein.');
         return;
       }
 
@@ -258,14 +256,14 @@ Extra rules:
         // Type mismatch: user selected wrong scan mode
         if (parsed.type === 'mismatch_report') {
           setError(
-            'Yeh image Lab Report / Test lag rahi hai.\n\nAap ne Medicine select kiya tha. Sahi result ke liye peeche jaake "Lab Report" choose karein aur dobara scan karein.',
+            t.result?.mismatchReport || 'Looks like a lab report.',
           );
           setResult(null);
           return;
         }
         if (parsed.type === 'mismatch_medicine') {
           setError(
-            'Yeh image Medicine pack/strip lag rahi hai.\n\nAap ne Report / Test select kiya tha. Sahi result ke liye peeche jaake "Medicine" choose karein aur dobara scan karein.',
+            t.result?.mismatchMedicine || 'Looks like medicine.',
           );
           setResult(null);
           return;
@@ -279,7 +277,7 @@ Extra rules:
             String(parsed.name).toLowerCase().includes('image issue'))
         ) {
           setError(
-            'Image issue — photo clear nahi hai ya medical item detect nahi hua.\n\nBehtar lighting mein seedha aur clear photo lein, phir dobara upload karein.',
+            t.result?.imageBad || 'Image issue — photo unclear.',
           );
           setResult(null);
           return;
@@ -299,7 +297,7 @@ Extra rules:
     } catch (err) {
       console.log('Analysis error:', err);
       setError(
-        'Analysis fail ho gaya. Internet check karein ya thodi der baad dobara try karein.',
+        t.result?.analysisFail || 'Analysis failed.',
       );
     } finally {
       setLoading(false);
@@ -386,12 +384,18 @@ Reply in 2-5 short clear sentences. Only medicine/report related. No asterisks, 
           ? 'Medicine'
           : 'Other';
 
-  const aboutTitle = isReport ? 'Report ka simple matlab' : 'Medicine ke bare mein';
-  const packageTitle = isReport ? 'Report par likha hua' : 'Packaging par likha hua';
-  const notesTitle = isReport ? 'Zaroori baatein' : 'Important notes';
+  const aboutTitle = isReport
+    ? (t.result?.aboutReport || 'What this report means')
+    : (t.result?.aboutMedicine || 'About this medicine');
+  const packageTitle = isReport
+    ? (t.result?.onReport || 'Written on report')
+    : (t.result?.onPackage || 'Written on packaging');
+  const notesTitle = isReport
+    ? (t.result?.notesReport || 'Important points')
+    : (t.result?.notes || 'Important notes');
   const chatPlaceholder = isReport
-    ? 'Report ke bare mein sawal poochhein...'
-    : 'Medicine ke bare mein sawal poochhein...';
+    ? (t.result?.chatReport || 'Ask about this report…')
+    : (t.result?.chatMedicine || 'Ask about this medicine…');
 
   const displayImage = imageUri || savedScan?.imageUri;
 
@@ -413,7 +417,7 @@ Reply in 2-5 short clear sentences. Only medicine/report related. No asterisks, 
         <Pressable onPress={() => navigation.goBack()} style={styles.backBtn}>
           <ChevronLeft size={20} color={colors.textDark} />
         </Pressable>
-        <Text style={styles.headerTitle}>Scan Result</Text>
+        <Text style={styles.headerTitle}>{t.result?.title || 'Scan Result'}</Text>
         {result?.confidence != null && (
           <View style={styles.badge}>
             <Text style={styles.badgeText}>{result.confidence}% match</Text>
@@ -437,13 +441,13 @@ Reply in 2-5 short clear sentences. Only medicine/report related. No asterisks, 
         {loading && (
           <View style={styles.centerBox}>
             <ActivityIndicator size="large" color={colors.primary} />
-            <Text style={styles.loadingText}>Result taiyar ho raha hai...</Text>
+            <Text style={styles.loadingText}>{t.result?.loading || 'Preparing result…'}</Text>
           </View>
         )}
 
         {!loading && error && (
           <View style={styles.errorCard}>
-            <Text style={styles.errorTitle}>Image Issue</Text>
+            <Text style={styles.errorTitle}>{t.result?.imageIssue || 'Image Issue'}</Text>
             <Text style={styles.errorText}>{error}</Text>
             <View style={styles.errorActions}>
               <Pressable
@@ -455,7 +459,7 @@ Reply in 2-5 short clear sentences. Only medicine/report related. No asterisks, 
                 }
                 style={styles.retryBtn}
               >
-                <Text style={styles.retryText}>Nayi image upload karein</Text>
+                <Text style={styles.retryText}>{t.result?.uploadNew || 'Upload new image'}</Text>
               </Pressable>
               {imageUri ? (
                 <Pressable
@@ -463,7 +467,7 @@ Reply in 2-5 short clear sentences. Only medicine/report related. No asterisks, 
                   style={styles.secondaryRetryBtn}
                 >
                   <Text style={styles.secondaryRetryText}>
-                    Isi image se dobara try
+                    {t.result?.retrySame || 'Retry with same image'}
                   </Text>
                 </Pressable>
               ) : null}

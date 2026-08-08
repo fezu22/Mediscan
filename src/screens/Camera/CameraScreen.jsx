@@ -22,50 +22,55 @@ import {
 } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '@/theme/colors';
+import { useLanguage } from '@/context/LanguageContext';
 
-const SCAN_TYPES = [
-  {
-    id: 'medicine',
-    title: 'Medicine',
-    subtitle: 'Pack, strip, bottle, blister',
-    icon: Pill,
-    tip: 'Label seedha rakho, light achhi ho, edges clear hon.',
-    frameHint: 'Medicine pack / strip frame ke andar rakho',
-    color: '#0E9F8E',
-  },
-  {
-    id: 'report',
-    title: 'Lab Report',
-    subtitle: 'Blood, urine, pathology report',
-    icon: FileText,
-    tip: 'Ek page ek dafa. Paper flat, shadow kam, text readable.',
-    frameHint: 'Poora report page frame mein aana chahiye',
-    color: '#3B82F6',
-  },
-  {
-    id: 'xray',
-    title: 'X-Ray / Scan',
-    subtitle: 'X-ray, CT, MRI print / film',
-    icon: Scan,
-    tip: 'Film/print flat surface pe. Glare avoid karo, poora image cover karo.',
-    frameHint: 'X-ray / scan film poori tarah frame mein',
-    color: '#8B5CF6',
-  },
-  {
-    id: 'prescription',
-    title: 'Prescription',
-    subtitle: 'Doctor ka handwritten / printed Rx',
-    icon: ClipboardList,
-    tip: 'Page seedha, handwriting clear. Ek page at a time.',
-    frameHint: 'Prescription page frame ke andar',
-    color: '#F59E0B',
-  },
-];
+function buildScanTypes(c) {
+  return [
+    {
+      id: 'medicine',
+      title: c.medicine || 'Medicine',
+      subtitle: c.medicineSub || 'Pack, strip, bottle, blister',
+      icon: Pill,
+      tip: c.medicineTip || '',
+      frameHint: c.medicineFrame || '',
+      color: '#0E9F8E',
+    },
+    {
+      id: 'report',
+      title: c.report || 'Lab Report',
+      subtitle: c.reportSub || 'Blood, urine, pathology report',
+      icon: FileText,
+      tip: c.reportTip || '',
+      frameHint: c.reportFrame || '',
+      color: '#3B82F6',
+    },
+    {
+      id: 'xray',
+      title: c.xray || 'X-Ray / Scan',
+      subtitle: c.xraySub || 'X-ray, CT, MRI print / film',
+      icon: Scan,
+      tip: c.xrayTip || '',
+      frameHint: c.xrayFrame || '',
+      color: '#8B5CF6',
+    },
+    {
+      id: 'prescription',
+      title: c.prescription || 'Prescription',
+      subtitle: c.prescriptionSub || 'Doctor handwritten / printed Rx',
+      icon: ClipboardList,
+      tip: c.prescriptionTip || '',
+      frameHint: c.prescriptionFrame || '',
+      color: '#F59E0B',
+    },
+  ];
+}
 
 export default function CameraScreen() {
   const navigation = useNavigation();
   const route = useRoute();
   const insets = useSafeAreaInsets();
+  const { t } = useLanguage();
+  const SCAN_TYPES = buildScanTypes(t.camera || {});
 
   const initialType = route.params?.scanType || null;
   const [step, setStep] = useState(initialType ? 'capture' : 'select');
@@ -73,7 +78,7 @@ export default function CameraScreen() {
   const [scannedImage, setScannedImage] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const current = SCAN_TYPES.find((t) => t.id === scanType) || SCAN_TYPES[0];
+  const current = SCAN_TYPES.find((item) => item.id === scanType) || SCAN_TYPES[0];
   const Icon = current.icon;
 
   const goToResult = (imageUri) => {
@@ -140,7 +145,7 @@ export default function CameraScreen() {
           <Pressable onPress={() => navigation.goBack()} style={styles.backBtn}>
             <ChevronLeft size={22} color={colors.textDark} />
           </Pressable>
-          <Text style={styles.headerTitle}>What are you scanning?</Text>
+          <Text style={styles.headerTitle}>{t.camera?.whatScanning || 'What are you scanning?'}</Text>
           <View style={{ width: 40 }} />
         </View>
 
@@ -235,8 +240,8 @@ export default function CameraScreen() {
               <Text style={styles.emptyTitle}>{current.frameHint}</Text>
               <Text style={styles.emptyHint}>
                 {scanType === 'medicine'
-                  ? 'Strip / bottle label clear dikhao'
-                  : 'Poora page / film frame ke andar aaye'}
+                  ? t.camera?.medicineHint || 'Show strip / bottle label clearly'
+                  : t.camera?.reportHint || 'Full page / film should fit in the frame'}
               </Text>
 
               {scanType === 'medicine' ? (
@@ -288,13 +293,13 @@ export default function CameraScreen() {
             >
               <ScanLine size={20} color="#fff" />
               <Text style={styles.primaryBtnText}>
-                {scanType === 'medicine' ? 'Scan Medicine' : 'Scan Document'}
+                {scanType === 'medicine' ? (t.camera?.scanMedicine || 'Scan Medicine') : (t.camera?.scanDocument || 'Scan Document')}
               </Text>
             </Pressable>
 
             <Pressable style={styles.secondaryBtn} onPress={pickFromGallery}>
               <ImageIcon size={18} color={colors.primary} />
-              <Text style={styles.secondaryBtnText}>Upload from Gallery</Text>
+              <Text style={styles.secondaryBtnText}>{t.camera?.uploadGallery || 'Upload from Gallery'}</Text>
             </Pressable>
           </View>
         )}
