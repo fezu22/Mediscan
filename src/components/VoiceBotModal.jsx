@@ -13,7 +13,13 @@ import Voice from '@react-native-voice/voice';
 import Tts from 'react-native-tts';
 import Config from 'react-native-config';
 
-const GEMINI_MODEL = 'gemini-2.0-flash';
+const GEMINI_MODEL = normalizeGeminiModelName(Config.GEMINI_MODEL);
+
+function normalizeGeminiModelName(rawModel) {
+  const trimmed = String(rawModel || '').trim();
+  if (!trimmed) return 'gemini-3.1-flash-lite';
+  return trimmed.replace(/^models\//, '').replace(/:generateContent$/, '') || 'gemini-3.1-flash-lite';
+}
 
 const RULES = `
 You are MedScan voice assistant for medicines and lab reports only.
@@ -483,6 +489,15 @@ export default function VoiceBotModal({ visible, onClose, scanContext }) {
   const askGemini = async (question) => {
     setStatus('thinking');
     try {
+      const geminiApiKey = String(Config.GEMINI_API_KEY || '').trim();
+      if (!geminiApiKey) {
+        setError(
+          'Gemini API key missing. Set GEMINI_API_KEY in .env and rebuild the app.',
+        );
+        setStatus('idle');
+        return;
+      }
+
       const prompt = `${RULES}
 
 Previous medicine/report scan:
@@ -495,7 +510,7 @@ Reply in the user's language. Short for voice.
 `;
 
       const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${Config.GEMINI_API_KEY}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${geminiApiKey}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -506,9 +521,10 @@ Reply in the user's language. Short for voice.
       );
 
       const data = await response.json();
+      const errorMessage = data?.error?.message || data?.message;
       const answer =
         data?.candidates?.[0]?.content?.parts?.[0]?.text ||
-        data?.error?.message ||
+        errorMessage ||
         'Jawab nahi mil saka.';
 
       const clean = String(answer).replace(/\*/g, '').trim();

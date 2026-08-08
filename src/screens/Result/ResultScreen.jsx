@@ -21,7 +21,13 @@ import { useLanguage } from '@/context/LanguageContext';
 import VoiceBotModal from '@/components/VoiceBotModal';
 import { colors } from '@/theme/colors';
 
-const GEMINI_MODEL = 'gemini-2.0-flash';
+const GEMINI_MODEL = normalizeGeminiModelName(Config.GEMINI_MODEL);
+
+function normalizeGeminiModelName(rawModel) {
+  const trimmed = String(rawModel || '').trim();
+  if (!trimmed) return 'gemini-3.1-flash-lite';
+  return trimmed.replace(/^models\//, '').replace(/:generateContent$/, '') || 'gemini-3.1-flash-lite';
+}
 
 const LANG_NAMES = {
   en: 'English',
@@ -153,8 +159,11 @@ export default function ResultScreen() {
       setRawText(null);
       setChatMessages([]);
 
-      if (!Config.GEMINI_API_KEY) {
-        setError('Gemini API key missing. .env mein GEMINI_API_KEY set karein.');
+      const geminiApiKey = String(Config.GEMINI_API_KEY || '').trim();
+      if (!geminiApiKey) {
+        setError(
+          'Gemini API key missing. Set GEMINI_API_KEY in .env and rebuild the app.',
+        );
         setLoading(false);
         return;
       }
@@ -209,7 +218,7 @@ Extra rules:
 `;
 
       const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${Config.GEMINI_API_KEY}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${geminiApiKey}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -232,10 +241,13 @@ Extra rules:
       );
 
       const data = await response.json();
+      const errorMessage = data?.error?.message || data?.message;
       const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
 
       if (!text) {
-        setError(data?.error?.message || 'Result nahi mil saka. Dobara try karein.');
+        setError(
+          errorMessage || 'Result nahi mil saka. Dobara try karein.',
+        );
         return;
       }
 
@@ -317,8 +329,21 @@ User question: ${question}
 Reply in 2-5 short clear sentences. Only medicine/report related. No asterisks, no filler. If price/alternatives asked — give approx Pakistan info and say pharmacy se confirm karein.
 `;
 
+      const geminiApiKey = String(Config.GEMINI_API_KEY || '').trim();
+      if (!geminiApiKey) {
+        setChatMessages((prev) => [
+          ...prev,
+          {
+            role: 'ai',
+            text: 'Gemini API key missing. Set GEMINI_API_KEY in .env and rebuild the app.',
+          },
+        ]);
+        setChatLoading(false);
+        return;
+      }
+
       const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${Config.GEMINI_API_KEY}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${geminiApiKey}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
