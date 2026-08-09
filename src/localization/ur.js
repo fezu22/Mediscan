@@ -4,10 +4,10 @@ export default {
     tip1: 'تپ 1: درست اسکن کے لیے اچھی روشنی یقینی بنائیں',
     tip2: 'تپ 2: دستاویز کو مستحکم اور برابر رکھیں',
     tip3: 'تپ 3: किनारों کو مکمل طور پر مرئی یقینی بنائیں',
-    medicineBtn: 'دوا',
-    medicineSub: 'پیک / سٹریپ',
+    medicineBtn: 'دوائی',
+    medicineSub: 'پیک / سٹرپ',
     reportBtn: 'رپورٹ',
-    reportSub: 'لاب / ایکس-ری',
+    reportSub: 'لیب / ایکس رے',
     quickTips: 'جلدی ٹپس',
   },
   camera: {
