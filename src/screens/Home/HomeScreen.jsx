@@ -106,7 +106,7 @@ export default function HomeScreen() {
           </View>
           <View style={styles.headerRight}>
             <Image
-              source={require('../../assets/images/logo.png')}
+              source={require('../../../assets/images/logo.png')}
               style={styles.headerLogo}
               resizeMode="contain"
             />

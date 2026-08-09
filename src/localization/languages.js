@@ -4,13 +4,7 @@ import ar from './ar';
 import hi from './hi';
 import ps from './ps';
 
-export const dictionaries = {
-  en,
-  ur,
-  ar,
-  hi,
-  ps,
-};
+export const dictionaries = { en, ur, ar, hi, ps };
 
 export const LANGUAGES = [
   { code: 'en', name: 'English', native: 'English' },
