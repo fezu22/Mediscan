@@ -190,10 +190,10 @@ export default function HomeScreen() {
             >
               <FileText size={22} color="#fff" />
               <Text style={styles.scanCardTitle}>
-                {t.home?.reportBtn}
+                {t.home?.reportBtn || 'Report'}
               </Text>
               <Text style={styles.scanCardSub}>
-                {t.home?.reportSub}
+                {t.home?.reportSub || 'Lab / X-Ray'}
               </Text>
             </Pressable>
           </View>
