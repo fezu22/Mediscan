@@ -1,4 +1,10 @@
 export default {
+  tabs: {
+    home: 'Home',
+    history: 'History',
+    profile: 'Profile',
+  },
+
   home: {
     greeting: 'Hello',
     tip1: 'Tip 1: Ensure good lighting for accurate scans',
@@ -10,30 +16,32 @@ export default {
     reportSub: 'Lab / X-Ray',
     quickTips: 'Quick Tips',
   },
+
   camera: {
     whatScanning: 'What are you scanning?',
     medicine: 'Medicine',
     medicineSub: 'Pack, strip, bottle, blister',
-    medicineTip: '',
-    medicineFrame: '',
+    medicineTip: 'Keep the label straight, good light, edges clear.',
+    medicineFrame: 'Keep medicine pack / strip inside the frame',
     report: 'Lab Report',
     reportSub: 'Blood, urine, pathology report',
-    reportTip: '',
-    reportFrame: '',
+    reportTip: 'One page at a time. Paper flat, less shadow, readable text.',
+    reportFrame: 'Full report page should fit in the frame',
     xray: 'X-Ray / Scan',
     xraySub: 'X-ray, CT, MRI print / film',
-    xrayTip: '',
-    xrayFrame: '',
+    xrayTip: 'Film/print on a flat surface. Avoid glare, cover the full image.',
+    xrayFrame: 'X-ray / scan film fully inside the frame',
     prescription: 'Prescription',
     prescriptionSub: 'Doctor handwritten / printed Rx',
-    prescriptionTip: '',
-    prescriptionFrame: '',
+    prescriptionTip: 'Page straight, handwriting clear. One page at a time.',
+    prescriptionFrame: 'Prescription page inside the frame',
     medicineHint: 'Show strip / bottle label clearly',
     reportHint: 'Full page / film should fit in the frame',
     scanMedicine: 'Scan Medicine',
     scanDocument: 'Scan Document',
     uploadGallery: 'Upload from Gallery',
   },
+
   result: {
     title: 'Scan Result',
     loading: 'Preparing result...',
@@ -71,6 +79,7 @@ export default {
     unknown: 'Unknown',
     noScanYet: 'No scan yet',
   },
+
   history: {
     tabs: {
       history: 'History',
@@ -86,5 +95,25 @@ export default {
     typeMedicine: 'Medicine',
     typeOther: 'Other',
     scan: 'Scan',
+  },
+
+  profile: {
+    title: 'My',
+    subtitle: 'Profile',
+    signedIn: 'Signed in',
+    guest: 'Guest mode',
+    totalScans: 'Total Scans',
+    language: 'Language',
+    selectLanguage: 'Select Language',
+    settings: 'Settings',
+    notifications: 'Notifications',
+    privacy: 'Privacy Policy',
+    terms: 'Terms of Service',
+    rate: 'Rate App',
+    support: 'Support',
+    logout: 'Log Out',
+    logoutConfirm: 'Log out?',
+    logoutMsg: 'You will be signed out of your account.',
+    cancel: 'Cancel',
   },
 };

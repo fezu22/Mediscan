@@ -8,7 +8,6 @@ import HomeScreen from '@/screens/Home/HomeScreen';
 import HistoryScreen from '@/screens/History/HistoryScreen';
 import ProfileScreen from '@/screens/Profile/ProfileScreen';
 import CameraScreen from '@/screens/Camera/CameraScreen';
-import ResultScreen from '@/screens/Result/ResultScreen';
 
 const Tab = createBottomTabNavigator();
 
@@ -35,7 +34,7 @@ export default function MainTabNavigator() {
         name="Home"
         component={HomeScreen}
         options={{
-          title: t.tabs.home,
+          title: t.tabs?.home || 'Home',
           tabBarIcon: ({ color, size }) => <Home color={color} size={size} />,
         }}
       />
@@ -43,8 +42,10 @@ export default function MainTabNavigator() {
         name="History"
         component={HistoryScreen}
         options={{
-          title: t.tabs.history,
-          tabBarIcon: ({ color, size }) => <History color={color} size={size} />,
+          title: t.tabs?.history || 'History',
+          tabBarIcon: ({ color, size }) => (
+            <History color={color} size={size} />
+          ),
         }}
       />
       <Tab.Screen
@@ -56,22 +57,11 @@ export default function MainTabNavigator() {
           tabBarStyle: { display: 'none' },
         }}
       />
-
-      <Tab.Screen
-        name="Result"
-        component={ResultScreen}
-        options={{
-          title: 'Result',
-          tabBarButton: () => null,
-          tabBarStyle: { display: 'none' },
-        }}
-      />
-
       <Tab.Screen
         name="Profile"
         component={ProfileScreen}
         options={{
-          title: t.tabs.profile,
+          title: t.tabs?.profile || 'Profile',
           tabBarIcon: ({ color, size }) => <User color={color} size={size} />,
         }}
       />
