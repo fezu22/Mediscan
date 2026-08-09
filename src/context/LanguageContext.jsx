@@ -1,10 +1,16 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { I18nManager } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getDictionary, LANGUAGES } from '@/localization';
+import { getDictionary, LANGUAGES, isRTL } from '@/localization';
 
 const LANGUAGE_STORAGE_KEY = '@medscan/language';
 
-const LanguageContext = createContext(undefined);
+const globalKey = '__MEDSCAN_LANGUAGE_CONTEXT__';
+const LanguageContext =
+  globalThis[globalKey] || createContext(undefined);
+if (!globalThis[globalKey]) {
+  globalThis[globalKey] = LanguageContext;
+}
 
 export function LanguageProvider({ children }) {
   const [language, setLanguageState] = useState('en');
@@ -16,6 +22,11 @@ export function LanguageProvider({ children }) {
         const stored = await AsyncStorage.getItem(LANGUAGE_STORAGE_KEY);
         if (stored && LANGUAGES.some((l) => l.code === stored)) {
           setLanguageState(stored);
+          const rtl = isRTL(stored);
+          if (I18nManager.isRTL !== rtl) {
+            I18nManager.allowRTL(rtl);
+            I18nManager.forceRTL(rtl);
+          }
         }
       } finally {
         setIsReady(true);
@@ -24,8 +35,17 @@ export function LanguageProvider({ children }) {
   }, []);
 
   const setLanguage = async (lang) => {
+    const rtl = isRTL(lang);
+    const rtlChanged = I18nManager.isRTL !== rtl;
+
     setLanguageState(lang);
     await AsyncStorage.setItem(LANGUAGE_STORAGE_KEY, lang);
+
+    if (rtlChanged) {
+      I18nManager.allowRTL(rtl);
+      I18nManager.forceRTL(rtl);
+      // RN needs reload for full RTL layout; strings update immediately via state
+    }
   };
 
   const value = useMemo(
@@ -35,6 +55,7 @@ export function LanguageProvider({ children }) {
       isReady,
       setLanguage,
       languages: LANGUAGES,
+      isRTL: isRTL(language),
     }),
     [language, isReady],
   );

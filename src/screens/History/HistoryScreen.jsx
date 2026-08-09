@@ -28,13 +28,6 @@ function formatDate(iso) {
   });
 }
 
-function typeLabel(type) {
-  if (type === 'report') return 'Lab Report';
-  if (type === 'prescription') return 'Prescription';
-  if (type === 'medicine') return 'Medicine';
-  return 'Other';
-}
-
 export default function HistoryScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
@@ -81,15 +74,22 @@ export default function HistoryScreen() {
     setScans(next);
   };
 
+  const typeLabel = (type) => {
+    if (type === 'report') return t.history?.typeReport || 'Lab Report';
+    if (type === 'prescription') return t.history?.typePrescription || 'Prescription';
+    if (type === 'medicine') return t.history?.typeMedicine || 'Medicine';
+    return t.history?.typeOther || 'Other';
+  };
+
   return (
     <View style={styles.container}>
       <AppModal
         visible={!!deleteItem}
         type="confirm"
-        title="Delete scan?"
-        message={deleteItem?.name || 'Scan'}
-        confirmText="Delete"
-        cancelText="Cancel"
+        title={t.history?.deleteTitle}
+        message={t.history?.deleteMessage?.replace('{name}', deleteItem?.name) || deleteItem?.name || 'Scan'}
+        confirmText={t.history?.confirmText}
+        cancelText={t.history?.cancelText}
         showCancel
         onConfirm={confirmDelete}
         onCancel={() => setDeleteItem(null)}
@@ -100,7 +100,9 @@ export default function HistoryScreen() {
         <View style={styles.headerRow}>
           <View>
             <Text style={styles.title}>{t.tabs?.history || 'History'}</Text>
-            <Text style={styles.subtitle}>{scans.length} saved</Text>
+            <Text style={styles.subtitle}>
+              {scans.length} {t.history?.scanSaved || 'saved'}
+            </Text>
           </View>
           <Image
             source={require('../../../assets/images/logo.png')}
@@ -127,9 +129,9 @@ export default function HistoryScreen() {
             <View style={styles.card}>
               <Card style={styles.emptyCard}>
                 <Clock size={28} color={colors.primary} />
-                <Text style={styles.emptyTitle}>Abhi koi scan nahi</Text>
+                <Text style={styles.emptyTitle}>{t.history?.emptyTitle || 'No scans yet'}</Text>
                 <Text style={styles.emptySub}>
-                  Medicine ya report scan karo — yahan save ho jayegi
+                  {t.history?.emptySub || 'Scan a medicine or report — it will be saved here'}
                 </Text>
               </Card>
             </View>
@@ -152,7 +154,7 @@ export default function HistoryScreen() {
                   )}
                   <View style={styles.meta}>
                     <Text style={styles.name} numberOfLines={1}>
-                      {item.name || 'Scan'}
+                      {item.name || (t.history?.scan || 'Scan')}
                     </Text>
                     {!!item.subtitle && (
                       <Text style={styles.salt} numberOfLines={1}>

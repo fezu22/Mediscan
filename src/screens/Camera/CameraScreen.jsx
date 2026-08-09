@@ -145,7 +145,7 @@ export default function CameraScreen() {
           <Pressable onPress={() => navigation.goBack()} style={styles.backBtn}>
             <ChevronLeft size={22} color={colors.textDark} />
           </Pressable>
-          <Text style={styles.headerTitle}>{t.camera?.whatScanning || 'What are you scanning?'}</Text>
+           <Text style={styles.headerTitle}>{t.camera?.whatScanning}</Text>
           <View style={{ width: 40 }} />
         </View>
 
@@ -293,7 +293,7 @@ export default function CameraScreen() {
             >
               <ScanLine size={20} color="#fff" />
               <Text style={styles.primaryBtnText}>
-                {scanType === 'medicine' ? (t.camera?.scanMedicine || 'Scan Medicine') : (t.camera?.scanDocument || 'Scan Document')}
+                {scanType === 'medicine' ? t.camera?.scanMedicine || 'Scan Medicine' : t.camera?.scanDocument || 'Scan Document'}
               </Text>
             </Pressable>
 

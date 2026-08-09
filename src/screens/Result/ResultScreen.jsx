@@ -21,13 +21,7 @@ import { useLanguage } from '@/context/LanguageContext';
 import VoiceBotModal from '@/components/VoiceBotModal';
 import { colors } from '@/theme/colors';
 
-const GEMINI_MODEL = normalizeGeminiModelName(Config.GEMINI_MODEL);
-
-function normalizeGeminiModelName(rawModel) {
-  const trimmed = String(rawModel || '').trim();
-  if (!trimmed) return 'gemini-3.1-flash-lite';
-  return trimmed.replace(/^models\//, '').replace(/:generateContent$/, '') || 'gemini-3.1-flash-lite';
-}
+const GEMINI_MODEL = 'gemini-3.1-flash-lite';
 
 const LANG_NAMES = {
   en: 'English',
@@ -147,7 +141,7 @@ export default function ResultScreen() {
       analyzeImage(imageUri);
     } else {
       setLoading(false);
-      setError(t.result?.noImage || 'No image found.');
+      setError(t.result?.errorNoImage || 'No image found.');
     }
   }, [imageUri, savedScan]);
 
@@ -159,12 +153,8 @@ export default function ResultScreen() {
       setRawText(null);
       setChatMessages([]);
 
-      const geminiApiKey = String(Config.GEMINI_API_KEY || '').trim();
-      if (!geminiApiKey) {
-        setError(
-          t.result?.keyMissing ||
-            'Gemini API key missing. Set GEMINI_API_KEY in .env and rebuild the app.',
-        );
+      if (!Config.GEMINI_API_KEY) {
+        setError(t.result?.errorApiKey || 'Gemini API key missing. Set GEMINI_API_KEY in .env');
         setLoading(false);
         return;
       }
@@ -219,7 +209,7 @@ Extra rules:
 `;
 
       const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${geminiApiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${Config.GEMINI_API_KEY}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -245,7 +235,7 @@ Extra rules:
       const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
 
       if (!text) {
-        setError(data?.error?.message || 'Result nahi mil saka. Dobara try karein.');
+        setError(data?.error?.message || t.result?.errorAnalysis || 'Analysis failed.');
         return;
       }
 
@@ -253,32 +243,23 @@ Extra rules:
       try {
         const parsed = JSON.parse(cleaned);
 
-        // Type mismatch: user selected wrong scan mode
         if (parsed.type === 'mismatch_report') {
-          setError(
-            t.result?.mismatchReport || 'Looks like a lab report.',
-          );
+          setError(t.result?.errorMismatchReport || 'This looks like a Lab Report / Test.');
           setResult(null);
           return;
         }
         if (parsed.type === 'mismatch_medicine') {
-          setError(
-            t.result?.mismatchMedicine || 'Looks like medicine.',
-          );
+          setError(t.result?.errorMismatchMedicine || 'This looks like a Medicine pack/strip.');
           setResult(null);
           return;
         }
 
-        // Image quality / not medical
         if (
           parsed.type === 'unknown' ||
           (parsed.confidence != null && parsed.confidence < 35) ||
-          (parsed.name &&
-            String(parsed.name).toLowerCase().includes('image issue'))
+          (parsed.name && String(parsed.name).toLowerCase().includes('image issue'))
         ) {
-          setError(
-            t.result?.imageBad || 'Image issue — photo unclear.',
-          );
+          setError(t.result?.errorBlurry || 'Image issue — photo is not clear.');
           setResult(null);
           return;
         }
@@ -296,9 +277,7 @@ Extra rules:
       }
     } catch (err) {
       console.log('Analysis error:', err);
-      setError(
-        t.result?.analysisFail || 'Analysis failed.',
-      );
+      setError(t.result?.errorAnalysis || 'Analysis failed. Check internet.');
     } finally {
       setLoading(false);
     }
@@ -327,21 +306,8 @@ User question: ${question}
 Reply in 2-5 short clear sentences. Only medicine/report related. No asterisks, no filler. If price/alternatives asked — give approx Pakistan info and say pharmacy se confirm karein.
 `;
 
-      const geminiApiKey = String(Config.GEMINI_API_KEY || '').trim();
-      if (!geminiApiKey) {
-        setChatMessages((prev) => [
-          ...prev,
-          {
-            role: 'ai',
-            text: 'Gemini API key missing. Set GEMINI_API_KEY in .env and rebuild the app.',
-          },
-        ]);
-        setChatLoading(false);
-        return;
-      }
-
       const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${geminiApiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${Config.GEMINI_API_KEY}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -355,14 +321,14 @@ Reply in 2-5 short clear sentences. Only medicine/report related. No asterisks, 
       const answer =
         data?.candidates?.[0]?.content?.parts?.[0]?.text ||
         data?.error?.message ||
-        'Jawab nahi mil saka. Dobara try karein.';
+        (t.result?.errorChat || 'Could not process question.');
 
       setChatMessages((prev) => [...prev, { role: 'ai', text: answer }]);
     } catch (e) {
       console.log('Chat error:', e);
       setChatMessages((prev) => [
         ...prev,
-        { role: 'ai', text: 'Sawal process nahi ho saka. Internet check karein.' },
+        { role: 'ai', text: t.result?.errorChat || 'Could not process question. Check internet.' },
       ]);
     } finally {
       setChatLoading(false);
@@ -371,41 +337,40 @@ Reply in 2-5 short clear sentences. Only medicine/report related. No asterisks, 
 
   const toggle = (key) => setExpanded((e) => (e === key ? null : key));
 
-  const isReport =
-    result?.type === 'report' || result?.type === 'prescription';
+  const isReport = result?.type === 'report' || result?.type === 'prescription';
   const isMedicine = result?.type === 'medicine';
 
   const typeLabel =
     result?.type === 'report'
-      ? 'Lab Report'
+      ? t.result?.typeReport || 'Lab Report'
       : result?.type === 'prescription'
-        ? 'Prescription'
+        ? t.result?.typePrescription || 'Prescription'
         : result?.type === 'medicine'
-          ? 'Medicine'
-          : 'Other';
+          ? t.result?.typeMedicine || 'Medicine'
+          : t.result?.typeOther || 'Other';
 
   const aboutTitle = isReport
-    ? (t.result?.aboutReport || 'What this report means')
-    : (t.result?.aboutMedicine || 'About this medicine');
+    ? t.result?.aboutReport || 'Simple meaning of report'
+    : t.result?.aboutMedicine || 'About this medicine';
+
   const packageTitle = isReport
-    ? (t.result?.onReport || 'Written on report')
-    : (t.result?.onPackage || 'Written on packaging');
+    ? t.result?.onPackageReport || 'Written on report'
+    : t.result?.onPackageMedicine || 'Written on packaging';
+
   const notesTitle = isReport
-    ? (t.result?.notesReport || 'Important points')
-    : (t.result?.notes || 'Important notes');
+    ? t.result?.notesReport || 'Important points'
+    : t.result?.notesMedicine || 'Important notes';
+
   const chatPlaceholder = isReport
-    ? (t.result?.chatReport || 'Ask about this report…')
-    : (t.result?.chatMedicine || 'Ask about this medicine…');
+    ? t.result?.chatPlaceholderReport || 'Ask about this report...'
+    : t.result?.chatPlaceholderMedicine || 'Ask about this medicine...';
 
   const displayImage = imageUri || savedScan?.imageUri;
 
   const alts = Array.isArray(result?.alternatives) ? result.alternatives : [];
   const hasFormula =
     isMedicine &&
-    (result?.formula ||
-      result?.howItWorks ||
-      result?.whyInMedicine ||
-      result?.howToUse);
+    (result?.formula || result?.howItWorks || result?.whyInMedicine || result?.howToUse);
   const hasPrice = isMedicine && result?.price?.approxPkr;
 
   return (
@@ -420,7 +385,9 @@ Reply in 2-5 short clear sentences. Only medicine/report related. No asterisks, 
         <Text style={styles.headerTitle}>{t.result?.title || 'Scan Result'}</Text>
         {result?.confidence != null && (
           <View style={styles.badge}>
-            <Text style={styles.badgeText}>{result.confidence}% match</Text>
+            <Text style={styles.badgeText}>
+              {result.confidence}{t.result?.match || '% match'}
+            </Text>
           </View>
         )}
       </View>
@@ -441,7 +408,9 @@ Reply in 2-5 short clear sentences. Only medicine/report related. No asterisks, 
         {loading && (
           <View style={styles.centerBox}>
             <ActivityIndicator size="large" color={colors.primary} />
-            <Text style={styles.loadingText}>{t.result?.loading || 'Preparing result…'}</Text>
+            <Text style={styles.loadingText}>
+              {t.result?.loading || 'Preparing result...'}
+            </Text>
           </View>
         )}
 
@@ -453,13 +422,14 @@ Reply in 2-5 short clear sentences. Only medicine/report related. No asterisks, 
               <Pressable
                 onPress={() =>
                   navigation.navigate('Camera', {
-                    scanType:
-                      scanMode === 'report' ? 'report' : 'medicine',
+                    scanType: scanMode === 'report' ? 'report' : 'medicine',
                   })
                 }
                 style={styles.retryBtn}
               >
-                <Text style={styles.retryText}>{t.result?.uploadNew || 'Upload new image'}</Text>
+                <Text style={styles.retryText}>
+                  {t.result?.retryNew || 'Upload new image'}
+                </Text>
               </Pressable>
               {imageUri ? (
                 <Pressable
@@ -467,7 +437,7 @@ Reply in 2-5 short clear sentences. Only medicine/report related. No asterisks, 
                   style={styles.secondaryRetryBtn}
                 >
                   <Text style={styles.secondaryRetryText}>
-                    {t.result?.retrySame || 'Retry with same image'}
+                    {t.result?.retrySame || 'Try again with same image'}
                   </Text>
                 </Pressable>
               ) : null}
@@ -490,7 +460,7 @@ Reply in 2-5 short clear sentences. Only medicine/report related. No asterisks, 
               </View>
               {hasPrice && (
                 <Text style={styles.priceLine}>
-                  Approx price: Rs. {result.price.approxPkr}
+                  {t.result?.priceApprox || 'Approx price: Rs.'} {result.price.approxPkr}
                 </Text>
               )}
             </View>
@@ -505,47 +475,40 @@ Reply in 2-5 short clear sentences. Only medicine/report related. No asterisks, 
 
             {hasFormula && (
               <Section
-                title="Formula & kaam"
+                title={t.result?.formulaTitle || 'Formula & how it works'}
                 open={expanded === 'formula'}
                 onPress={() => toggle('formula')}
               >
                 {!!result.formula && (
                   <>
-                    <Text style={styles.fieldLabel}>Formula / salt</Text>
+                    <Text style={styles.fieldLabel}>
+                      {t.result?.formulaLabel || 'Formula / salt'}
+                    </Text>
                     <FormattedText text={result.formula} style={styles.bodyText} />
                   </>
                 )}
                 {!!result.howItWorks && (
                   <>
                     <Text style={[styles.fieldLabel, { marginTop: 12 }]}>
-                      Yeh formula kaise kaam karta hai
+                      {t.result?.howItWorks || 'How this formula works'}
                     </Text>
-                    <FormattedText
-                      text={result.howItWorks}
-                      style={styles.bodyText}
-                    />
+                    <FormattedText text={result.howItWorks} style={styles.bodyText} />
                   </>
                 )}
                 {!!result.whyInMedicine && (
                   <>
                     <Text style={[styles.fieldLabel, { marginTop: 12 }]}>
-                      Is medicine mein kyun dala gaya
+                      {t.result?.whyInMedicine || 'Why it is used in this medicine'}
                     </Text>
-                    <FormattedText
-                      text={result.whyInMedicine}
-                      style={styles.bodyText}
-                    />
+                    <FormattedText text={result.whyInMedicine} style={styles.bodyText} />
                   </>
                 )}
                 {!!result.howToUse && (
                   <>
                     <Text style={[styles.fieldLabel, { marginTop: 12 }]}>
-                      Kaise use hota hai
+                      {t.result?.howToUse || 'How to use'}
                     </Text>
-                    <FormattedText
-                      text={result.howToUse}
-                      style={styles.bodyText}
-                    />
+                    <FormattedText text={result.howToUse} style={styles.bodyText} />
                   </>
                 )}
               </Section>
@@ -553,12 +516,12 @@ Reply in 2-5 short clear sentences. Only medicine/report related. No asterisks, 
 
             {alts.length > 0 && (
               <Section
-                title="Alternative medicines"
+                title={t.result?.alternatives || 'Alternative medicines'}
                 open={expanded === 'alts'}
                 onPress={() => toggle('alts')}
               >
                 <Text style={styles.altIntro}>
-                  Same / similar formula — doosri companies (approx)
+                  {t.result?.altIntro || 'Same / similar formula — other companies (approx)'}
                 </Text>
                 {alts.map((a, i) => (
                   <View key={i} style={styles.altRow}>
@@ -569,9 +532,7 @@ Reply in 2-5 short clear sentences. Only medicine/report related. No asterisks, 
                       )}
                     </View>
                     {!!a.priceApproxPkr && (
-                      <Text style={styles.altPrice}>
-                        Rs. {a.priceApproxPkr}
-                      </Text>
+                      <Text style={styles.altPrice}>Rs. {a.priceApproxPkr}</Text>
                     )}
                   </View>
                 ))}
@@ -620,7 +581,9 @@ Reply in 2-5 short clear sentences. Only medicine/report related. No asterisks, 
 
         {chatMessages.length > 0 && (
           <View style={styles.chatList}>
-            <Text style={styles.chatListTitle}>Aap ke sawalat</Text>
+            <Text style={styles.chatListTitle}>
+              {t.result?.chatTitle || 'Your questions'}
+            </Text>
             {chatMessages.map((m, i) => (
               <View
                 key={i}
@@ -652,7 +615,6 @@ Reply in 2-5 short clear sentences. Only medicine/report related. No asterisks, 
         <View style={{ height: 16 }} />
       </ScrollView>
 
-      {/* Chat bar + Voice bot button */}
       <View style={styles.chatBar}>
         <Pressable
           onPress={() => setVoiceOpen(true)}
@@ -680,20 +642,15 @@ Reply in 2-5 short clear sentences. Only medicine/report related. No asterisks, 
           {chatLoading ? (
             <ActivityIndicator size="small" color="#fff" />
           ) : (
-            <Text style={{ fontSize: 16, color: '#fff', fontWeight: '700' }}>
-              ➤
-            </Text>
+            <Text style={{ fontSize: 16, color: '#fff', fontWeight: '700' }}>➤</Text>
           )}
         </Pressable>
       </View>
 
-      {/* Grok-style voice bot overlay */}
       <VoiceBotModal
         visible={voiceOpen}
         onClose={() => setVoiceOpen(false)}
-        scanContext={
-          result ? JSON.stringify(result) : rawText || 'No scan yet'
-        }
+        scanContext={result ? JSON.stringify(result) : rawText || 'No scan yet'}
       />
     </KeyboardAvoidingView>
   );
@@ -771,10 +728,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   errorText: { color: colors.danger, fontSize: 14, lineHeight: 21 },
-  errorActions: {
-    marginTop: 16,
-    gap: 10,
-  },
+  errorActions: { marginTop: 16, gap: 10 },
   retryBtn: {
     alignSelf: 'flex-start',
     backgroundColor: colors.primary,
@@ -808,90 +762,80 @@ const styles = StyleSheet.create({
   medSub: { marginTop: 4, fontSize: 14, color: colors.textMuted },
   medMeta: { marginTop: 2, fontSize: 13, color: colors.textMuted },
   typeChip: {
-    marginTop: 12,
     alignSelf: 'flex-start',
     backgroundColor: '#E6F5F2',
+    borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 8,
-  },
-  typeChipText: { color: colors.primary, fontWeight: '600', fontSize: 12 },
-  priceLine: {
     marginTop: 10,
+  },
+  typeChipText: { color: colors.primary, fontWeight: '700', fontSize: 12 },
+  priceLine: {
+    marginTop: 8,
     fontSize: 14,
     fontWeight: '600',
     color: colors.textDark,
-  },
-  fieldLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.primary,
-    marginBottom: 4,
-    textTransform: 'uppercase',
-    letterSpacing: 0.3,
-  },
-  altIntro: {
-    fontSize: 12,
-    color: colors.textMuted,
-    marginBottom: 10,
-  },
-  altRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(0,0,0,0.08)',
-    gap: 8,
-  },
-  altName: { fontSize: 14, fontWeight: '600', color: colors.textDark },
-  altCompany: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
-  altPrice: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.primary,
   },
   section: {
     backgroundColor: '#fff',
     borderRadius: 16,
     marginBottom: 10,
     overflow: 'hidden',
+    elevation: 1,
   },
   sectionHeader: {
-    paddingHorizontal: 16,
-    paddingVertical: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
   },
-  sectionTitle: { fontSize: 15, fontWeight: '600', color: colors.textDark },
-  sectionBody: { paddingHorizontal: 16, paddingBottom: 16 },
-  bodyText: { fontSize: 14, lineHeight: 22, color: colors.textDark },
-  bullet: {
-    fontSize: 14,
-    lineHeight: 22,
+  sectionTitle: {
+    fontSize: 15,
+    fontWeight: '700',
     color: colors.textDark,
+    flex: 1,
+  },
+  sectionBody: { paddingHorizontal: 16, paddingBottom: 16 },
+  bodyText: { fontSize: 14, lineHeight: 21, color: colors.textDark },
+  fieldLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.primary,
     marginBottom: 4,
   },
-  chatList: { marginTop: 12, gap: 8 },
+  bullet: { fontSize: 14, lineHeight: 21, color: colors.textDark, marginBottom: 4 },
+  altIntro: { fontSize: 13, color: colors.textMuted, marginBottom: 10 },
+  altRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  altName: { fontSize: 14, fontWeight: '600', color: colors.textDark },
+  altCompany: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
+  altPrice: { fontSize: 13, fontWeight: '700', color: colors.primary },
+  chatList: { marginTop: 12 },
   chatListTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.textMuted,
-    marginBottom: 4,
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.textDark,
+    marginBottom: 10,
   },
   bubble: {
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    maxWidth: '88%',
+    borderRadius: 16,
+    padding: 12,
+    marginBottom: 8,
+    maxWidth: '85%',
   },
   bubbleUser: {
-    alignSelf: 'flex-end',
     backgroundColor: colors.primary,
+    alignSelf: 'flex-end',
   },
   bubbleAi: {
-    alignSelf: 'flex-start',
     backgroundColor: '#fff',
+    alignSelf: 'flex-start',
     elevation: 1,
   },
   bubbleText: { fontSize: 14, lineHeight: 20, color: colors.textDark },
@@ -899,34 +843,34 @@ const styles = StyleSheet.create({
   chatBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
     paddingVertical: 10,
     backgroundColor: '#fff',
     borderTopWidth: 1,
-    borderTopColor: 'rgba(0,0,0,0.06)',
+    borderTopColor: '#E5E7EB',
+    gap: 8,
   },
   micBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     backgroundColor: '#F3F4F6',
     alignItems: 'center',
     justifyContent: 'center',
   },
   chatInput: {
     flex: 1,
-    height: 44,
+    height: 42,
     backgroundColor: '#F3F4F6',
-    borderRadius: 12,
-    paddingHorizontal: 14,
+    borderRadius: 21,
+    paddingHorizontal: 16,
     fontSize: 14,
     color: colors.textDark,
   },
   chatSend: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',

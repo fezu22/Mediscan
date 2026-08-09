@@ -14,7 +14,6 @@ import { Lightbulb, User2, Pill, FileText } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Card from '@/components/Card';
-
 import { useLanguage } from '@/context/LanguageContext';
 import { useAuth } from '@/context/AuthContext';
 import { colors } from '@/theme/colors';
@@ -25,26 +24,14 @@ const CARD_H_PAD = 14;
 const CARD_MARGIN = 16;
 const BANNER_GAP = 10;
 const BANNER_WIDTH = SCREEN_WIDTH - CARD_MARGIN * 2 - CARD_H_PAD * 2;
-const BANNER_HEIGHT = Math.round(BANNER_WIDTH * 0.60);
+const BANNER_HEIGHT = Math.round(BANNER_WIDTH * 0.6);
 const AUTO_SCROLL_MS = 3500;
 
 const BANNERS = [
-  {
-    id: 'scan',
-    image: require('../../assets/Banners/banner_scan.jpg'),
-  },
-  {
-    id: 'family',
-    image: require('../../assets/Banners/banner_family.jpg'),
-  },
-  {
-    id: 'history',
-    image: require('../../assets/Banners/banner_history.jpg'),
-  },
-  {
-    id: 'verify',
-    image: require('../../assets/Banners/banner_verify.jpg'),
-  },
+  { id: 'scan', image: require('../../assets/Banners/banner_scan.jpg') },
+  { id: 'family', image: require('../../assets/Banners/banner_family.jpg') },
+  { id: 'history', image: require('../../assets/Banners/banner_history.jpg') },
+  { id: 'verify', image: require('../../assets/Banners/banner_verify.jpg') },
 ];
 
 export default function HomeScreen() {
@@ -95,9 +82,7 @@ export default function HomeScreen() {
   };
 
   const renderBanner = ({ item }) => (
-    <View
-      style={[styles.bannerSlide, { width: BANNER_WIDTH, height: BANNER_HEIGHT }]}
-    >
+    <View style={[styles.bannerSlide, { width: BANNER_WIDTH, height: BANNER_HEIGHT }]}>
       <Image
         source={item.image}
         style={{ width: BANNER_WIDTH, height: BANNER_HEIGHT }}
@@ -161,9 +146,7 @@ export default function HomeScreen() {
               decelerationRate="fast"
               snapToAlignment="start"
               disableIntervalMomentum
-              ItemSeparatorComponent={() => (
-                <View style={{ width: BANNER_GAP }} />
-              )}
+              ItemSeparatorComponent={() => <View style={{ width: BANNER_GAP }} />}
               onScroll={onBannerScroll}
               scrollEventThrottle={16}
               getItemLayout={(_, index) => ({
@@ -182,7 +165,7 @@ export default function HomeScreen() {
             </View>
           </View>
 
-          {/* Scan buttons */}
+          {/* Scan buttons - now language aware */}
           <View style={styles.scanRow}>
             <Pressable
               style={[styles.scanCard, styles.scanMedicine]}
@@ -191,8 +174,12 @@ export default function HomeScreen() {
               }
             >
               <Pill size={22} color="#fff" />
-              <Text style={styles.scanCardTitle}>Medicine</Text>
-              <Text style={styles.scanCardSub}>Pack / strip</Text>
+               <Text style={styles.scanCardTitle}>
+                 {t.home?.medicineBtn || 'Medicine'}
+               </Text>
+               <Text style={styles.scanCardSub}>
+                 {t.home?.medicineSub || 'Pack / strip'}
+               </Text>
             </Pressable>
 
             <Pressable
@@ -202,8 +189,12 @@ export default function HomeScreen() {
               }
             >
               <FileText size={22} color="#fff" />
-              <Text style={styles.scanCardTitle}>Report</Text>
-              <Text style={styles.scanCardSub}>Lab / X-Ray</Text>
+              <Text style={styles.scanCardTitle}>
+                {t.home?.reportBtn}
+              </Text>
+              <Text style={styles.scanCardSub}>
+                {t.home?.reportSub}
+              </Text>
             </Pressable>
           </View>
 
@@ -219,7 +210,6 @@ export default function HomeScreen() {
               <Text style={styles.tipText}>{tip}</Text>
             </Card>
           ))}
-
         </View>
       </ScrollView>
     </View>
