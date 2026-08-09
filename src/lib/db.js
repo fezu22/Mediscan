@@ -33,7 +33,9 @@ export async function getDB() {
       alternatives TEXT,
       price TEXT,
       image_uri TEXT,
-      created_at TEXT
+      created_at TEXT,
+      cloud_image_path TEXT,
+      cloud_synced_at TEXT
     );
   `);
 
@@ -41,6 +43,24 @@ export async function getDB() {
     CREATE INDEX IF NOT EXISTS idx_scans_user_created
     ON scans (user_id, created_at);
   `);
+
+  // Lightweight migration for installs created before cloud sync existed.
+  // SQLite has no "ADD COLUMN IF NOT EXISTS", so we check pragma first.
+  try {
+    const [cols] = await dbInstance.executeSql(`PRAGMA table_info(scans);`);
+    const existing = new Set();
+    for (let i = 0; i < cols.rows.length; i++) {
+      existing.add(cols.rows.item(i).name);
+    }
+    if (!existing.has('cloud_image_path')) {
+      await dbInstance.executeSql(`ALTER TABLE scans ADD COLUMN cloud_image_path TEXT;`);
+    }
+    if (!existing.has('cloud_synced_at')) {
+      await dbInstance.executeSql(`ALTER TABLE scans ADD COLUMN cloud_synced_at TEXT;`);
+    }
+  } catch (e) {
+    console.log('[MedScan] scans table migration check failed:', e);
+  }
 
   return dbInstance;
 }
@@ -74,5 +94,7 @@ export function rowToScan(row) {
     price: row.price || null,
     imageUri: row.image_uri || null,
     createdAt: row.created_at || null,
+    cloudImagePath: row.cloud_image_path || null,
+    cloudSyncedAt: row.cloud_synced_at || null,
   };
 }
