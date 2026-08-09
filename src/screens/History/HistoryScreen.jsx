@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -12,7 +12,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Clock, Trash2 } from 'lucide-react-native';
 import Card from '@/components/Card';
-import { getAllScans, deleteScan } from '@/lib/scanStorage';
+import { getAllScans, deleteScan, reconcileCloud } from '@/lib/scanStorage';
 import { colors } from '@/theme/colors';
 import { useLanguage } from '@/context/LanguageContext';
 import { useAuth } from '@/context/AuthContext';
@@ -48,6 +48,14 @@ export default function HistoryScreen() {
       load();
     }, [load]),
   );
+
+  // One-time cleanup of any orphan cloud records for this user. Cheap
+  // no-op if there's nothing to clean; safe to call each time History
+  // gains focus since reconcileCloud only removes rows that already
+  // don't exist locally.
+  useEffect(() => {
+    if (userId) reconcileCloud(userId);
+  }, [userId]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -143,8 +151,11 @@ export default function HistoryScreen() {
                 index === 0 && styles.firstItem,
               ]}
             >
-              <Pressable onPress={() => openScan(item)}>
-                <Card style={styles.row}>
+              <Card style={styles.row}>
+                <Pressable
+                  onPress={() => openScan(item)}
+                  style={styles.rowMainTouch}
+                >
                   {item.imageUri ? (
                     <Image source={{ uri: item.imageUri }} style={styles.thumb} />
                   ) : (
@@ -165,11 +176,15 @@ export default function HistoryScreen() {
                       {formatDate(item.createdAt)} · {typeLabel(item.type)}
                     </Text>
                   </View>
-                  <Pressable onPress={() => onDelete(item)} hitSlop={12}>
-                    <Trash2 size={18} color={colors.danger} />
-                  </Pressable>
-                </Card>
-              </Pressable>
+                </Pressable>
+                <Pressable
+                  onPress={() => onDelete(item)}
+                  hitSlop={12}
+                  style={styles.deleteTouch}
+                >
+                  <Trash2 size={18} color={colors.danger} />
+                </Pressable>
+              </Card>
             </View>
           )}
         />
@@ -218,6 +233,16 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingVertical: 12,
     paddingHorizontal: 12,
+  },
+  rowMainTouch: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  deleteTouch: {
+    paddingHorizontal: 6,
+    paddingVertical: 6,
   },
   thumb: {
     width: 52,

@@ -1,7 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import RNFS from 'react-native-fs';
 import { getDB, rowToScan } from './db';
-import { syncScanToCloud, deleteScanFromCloud } from './cloudSync';
+import {
+  syncScanToCloud,
+  deleteScanFromCloud,
+  markDeletedLocally,
+  reconcileCloudScans,
+} from './cloudSync';
 
 const OLD_KEY_PREFIX = '@medscan/scans_';
 const MIGRATED_FLAG = '@medscan/scans_migrated_v1';
@@ -211,9 +216,28 @@ export async function getRecentScans(limit = 5, userId) {
   return list.slice(0, limit);
 }
 
+/**
+ * Cleans up any orphan cloud records/images that don't match a scan that
+ * currently exists locally. Safe to call occasionally (e.g. once when the
+ * History or Profile screen mounts for a logged-in user) — it's a no-op
+ * network call if there's nothing to clean.
+ */
+export async function reconcileCloud(userId) {
+  const uid = storageUserId(userId);
+  if (uid === 'guest') return { success: false, error: 'skipped', removed: 0 };
+
+  const localScans = await getAllScans(userId);
+  const localIds = localScans.map((s) => s.id);
+  return reconcileCloudScans(uid, localIds);
+}
+
 export async function deleteScan(id, userId) {
   const db = await getDB();
   const uid = storageUserId(userId);
+
+  // Set this FIRST — if a background sync for this scan is still in
+  // flight, it checks this guard before writing and will back out.
+  markDeletedLocally(id);
 
   // optional: delete local image file + capture cloud path before the row is gone
   let cloudImagePath = null;
