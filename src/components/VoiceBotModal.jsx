@@ -20,25 +20,58 @@ const GEMINI_MODEL = 'gemini-3.1-flash-lite';
 
 const SYSTEM_PROMPT = `You are MedScan voice assistant for medicines and lab reports only.
 
-LANGUAGE RULE (STRICT):
-- Reply in the SAME language the user used.
-- Urdu / Roman Urdu → Urdu
-- Pashto → Pashto  
-- Hindi → Hindi
-- English → English
-- Never force English if user spoke another language.
+LANGUAGE RULE (STRICT - MOST IMPORTANT):
+- Reply in the EXACT same language the user spoke.
+- If user spoke Pashto (پښتو) → reply 100% in Pashto.
+- If user spoke Urdu / Roman Urdu → reply in Urdu.
+- If user spoke Hindi → reply in Hindi.
+- If user spoke English → reply in English.
+- Never mix languages. Never force English if user used another language.
 
-Rules:
-- Only medical topics. Non-medical: short refuse in user language.
-- Never invent dosage. Never diagnose.
-- No asterisks. Short answers (2-4 sentences).
-- Simple words.`;
+CONTENT RULES:
+- Only answer medical questions related to the scanned medicine or lab report.
+- If user asks how to use the medicine (kaise use karein / څنګه استعمال کړم / کیسے استعمال کریں) → give clear, simple general guidance from the scan context. Never invent exact dose numbers. Always remind: "package یا ڈاکٹر سے confirm کریں".
+- Never invent dosage. Never diagnose any disease.
+- Keep answers short (2-4 sentences) so they are good for voice.
+- Use simple everyday words.
+- No asterisks, no markdown, no bullet points.`;
 
 function detectLang(text) {
-  const t = (text || '').toLowerCase();
-  if (/[\u0600-\u06FF]/.test(text || '')) return 'ur';
-  if (/\b(hai|hain|kya|nahi|mujhe|meri|dawai|bukhar|sardi|dard)\b/.test(t)) return 'ur';
-  if (/\b(sta|staso|manana|shukria|pashto)\b/.test(t)) return 'ps';
+  const original = text || '';
+  const t = original.toLowerCase().trim();
+
+  // Pashto unique letters (Arabic script)
+  const pashtoChars = /[ټډړږښڅځڼ]/;
+  // Common Pashto words (Arabic script)
+  const pashtoWords =
+    /\b(ستا|ستاسو|مننه|شکریه|پښتو|درمل|څنګه|ولې|ښه|نه|هو|زه|ته|موږ|تاسو|دی|ده|دي|وی|که|چې|لپاره|استعمال|څنګه استعمال|څه|ولے|کړم|کړئ)\b/;
+  // Roman Pashto
+  const romanPashto =
+    /\b(sta|staso|manana|shukria|pashto|dawai|daway|tsanga|wale|kha|na|ho|za|ta|mung|taso|dai|da|di|wi|ka|che|lapara|estemal|tsanga estemal)\b/;
+
+  if (pashtoChars.test(original) || pashtoWords.test(original) || romanPashto.test(t)) {
+    return 'ps';
+  }
+
+  // Arabic script (Urdu / Pashto) — Pashto already checked above
+  if (/[\u0600-\u06FF]/.test(original)) {
+    return 'ur';
+  }
+
+  // Roman Urdu
+  if (
+    /\b(hai|hain|kya|nahi|mujhe|meri|dawai|dawaa|bukhar|sardi|dard|kaise|use|karun|karo|batao|bataiye|kitna|kitni)\b/.test(
+      t,
+    )
+  ) {
+    return 'ur';
+  }
+
+  // Hindi (Devanagari)
+  if (/[अ-ह]/.test(original)) {
+    return 'hi';
+  }
+
   return 'en';
 }
 
@@ -87,20 +120,77 @@ export default function VoiceBotModal({ visible, onClose, scanContext }) {
 
       const lang = detectLang(question);
       const langName =
-        lang === 'ur' ? 'Urdu' : lang === 'ps' ? 'Pashto' : 'English';
+        lang === 'ur'
+          try {
+            try {
+              const voices = await Tts.voices();
 
-      const prompt = `${SYSTEM_PROMPT}
+              let selectedVoice = null;
 
-Scan context:
-${scanContext || 'No scan context'}
+              if (lang === 'ps') {
+                // Pashto → prefer Urdu voice, then Hindi, then English
+                selectedVoice =
+                  voices.find(v => v.language?.startsWith('ur')) ||
+                  voices.find(v => v.language?.startsWith('hi')) ||
+                  voices.find(v => v.language?.startsWith('en'));
+              } else if (lang === 'ur') {
+                // Urdu
+                selectedVoice =
+                  voices.find(v => v.language?.startsWith('ur')) ||
+                  voices.find(v => v.language?.startsWith('hi')) ||
+                  voices.find(v => v.language?.startsWith('en'));
+              } else if (lang === 'hi') {
+                // Hindi
+                selectedVoice =
+                  voices.find(v => v.language?.startsWith('hi')) ||
+                  voices.find(v => v.language?.startsWith('en'));
+              } else {
+                // English
+                selectedVoice =
+                  voices.find(v => v.language === 'en-US' || v.language?.startsWith('en')) ||
+                  voices[0];
+              }
 
-User said: "${question}"
+              if (selectedVoice?.id) {
+                await Tts.setDefaultVoice(selectedVoice.id);
+              }
+            } catch (_) {
+              // ignore voice enumeration errors and continue to language fallbacks
+            }
 
-Reply ONLY in ${langName}. Short for voice.`;
+            // Set language
+            if (lang === 'ps' || lang === 'ur') {
+              try {
+                await Tts.setDefaultLanguage('ur-PK');
+              } catch (_) {
+                try {
+                  await Tts.setDefaultLanguage('hi-IN');
+                } catch (_) {
+                  await Tts.setDefaultLanguage('en-US');
+                }
+              }
+            } else if (lang === 'hi') {
+              try {
+                await Tts.setDefaultLanguage('hi-IN');
+              } catch (_) {
+                await Tts.setDefaultLanguage('en-US');
+              }
+            } else {
+              await Tts.setDefaultLanguage('en-US');
+            }
 
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${key}`,
-        {
+            // Different rate & pitch per language
+            if (lang === 'ps') {
+              await Tts.setDefaultRate(0.46);
+              await Tts.setDefaultPitch(0.95);
+            } else if (lang === 'ur') {
+              await Tts.setDefaultRate(0.48);
+              await Tts.setDefaultPitch(1.0);
+            } else {
+              await Tts.setDefaultRate(0.50);
+              await Tts.setDefaultPitch(1.05);
+            }
+          } catch (_) {}
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -121,14 +211,18 @@ Reply ONLY in ${langName}. Short for voice.`;
 
       const answer =
         data?.candidates?.[0]?.content?.parts?.[0]?.text ||
-        'Jawab nahi mil saka.';
+        (lang === 'ps'
+          ? 'ځواب نشو موندلی.'
+          : lang === 'ur'
+          ? 'جواب نہیں مل سکا۔'
+          : 'Could not get answer.');
 
       const clean = String(answer).replace(/\*/g, '').trim();
       setReply(clean);
       setStatus('speaking');
 
       try {
-        if (lang === 'ur' || lang === 'ps') {
+        if (lang === 'ps' || lang === 'ur') {
           try {
             await Tts.setDefaultLanguage('ur-PK');
           } catch (_) {
@@ -137,6 +231,12 @@ Reply ONLY in ${langName}. Short for voice.`;
             } catch (__) {
               await Tts.setDefaultLanguage('en-US');
             }
+          }
+        } else if (lang === 'hi') {
+          try {
+            await Tts.setDefaultLanguage('hi-IN');
+          } catch (_) {
+            await Tts.setDefaultLanguage('en-US');
           }
         } else {
           await Tts.setDefaultLanguage('en-US');
@@ -180,8 +280,8 @@ Reply ONLY in ${langName}. Short for voice.`;
       listeningRef.current = true;
       setStatus('listening');
 
-      // en-US pehle — Android pe sab se reliable
-      // Urdu/Roman Urdu bhi aksar en-US se catch ho jata hai
+      // en-US is most reliable on Android for Roman Urdu + English
+      // Pashto/Urdu script also often works through en-US
       try {
         await Voice.start('en-US', {
           EXTRA_PARTIAL_RESULTS: true,
@@ -252,7 +352,7 @@ Reply ONLY in ${langName}. Short for voice.`;
 
       listeningRef.current = false;
       const code = String(e?.error?.code || '');
-      // 7 = no match — normal hai, spam mat karo
+      // 7 = no match
       if (code === '7') {
         setStatus('idle');
         setError('Samajh nahi aaya. Phir se bolo ya type karo.');
@@ -263,7 +363,7 @@ Reply ONLY in ${langName}. Short for voice.`;
     };
 
     Voice.onSpeechEnd = () => {
-      // manual stop pe handle hoga
+      // handled by manual stop
     };
 
     const onTtsFinish = () => {
@@ -314,7 +414,7 @@ Reply ONLY in ${langName}. Short for voice.`;
         <View style={styles.header}>
           <View>
             <Text style={styles.title}>MedScan Voice</Text>
-            <Text style={styles.sub}>Urdu · English · Type bhi chalega</Text>
+            <Text style={styles.sub}>Pashto · Urdu · English · Type bhi chalega</Text>
           </View>
           <Pressable onPress={handleClose} style={styles.closeBtn}>
             <Text style={styles.closeText}>✕</Text>
@@ -368,7 +468,7 @@ Reply ONLY in ${langName}. Short for voice.`;
             {!!error && <Text style={styles.err}>{error}</Text>}
             {!transcript && !reply && !error && (
               <Text style={styles.hint}>
-                Mic se bolo ya neeche Type dabao. Roman Urdu bhi chalega.
+                Mic se bolo ya neeche Type dabao. Pashto / Urdu / English sab chalega.
               </Text>
             )}
           </View>
@@ -378,7 +478,7 @@ Reply ONLY in ${langName}. Short for voice.`;
             <View style={styles.typeBox}>
               <TextInput
                 style={styles.input}
-                placeholder="Apna sawal type karo..."
+                placeholder="Apna sawal type karo (Pashto / Urdu / English)..."
                 placeholderTextColor="#9CA3AF"
                 value={typed}
                 onChangeText={setTyped}
@@ -458,7 +558,6 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(14,159,142,0.35)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 20,
   },
   ringListen: {
     borderColor: '#0E9F8E',
