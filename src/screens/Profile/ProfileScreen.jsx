@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,14 +9,18 @@ import {
   ScrollView,
   Modal,
   FlatList,
+  Switch,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '@/context/AuthContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { getAllScans } from '@/lib/scanStorage';
 import { colors } from '@/theme/colors';
 import AppModal from '@/components/AppModal';
+
+const NOTIFICATIONS_KEY = '@medscan/notifications_enabled';
 
 function getInitials(name, email) {
   const n = (name || '').trim();
@@ -43,6 +47,15 @@ function displayContact(user) {
   return user?.phone || user?.user_metadata?.phone || user?.email || '—';
 }
 
+function getAvatarUrl(user) {
+  return (
+    user?.user_metadata?.avatar_url ||
+    user?.user_metadata?.picture ||
+    user?.user_metadata?.avatar ||
+    null
+  );
+}
+
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const { user, session, signOut, isAuthenticated } = useAuth();
@@ -51,6 +64,7 @@ export default function ProfileScreen() {
   const [langModal, setLangModal] = useState(false);
   const [logoutVisible, setLogoutVisible] = useState(false);
   const [loadingVisible, setLoadingVisible] = useState(false);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [infoModal, setInfoModal] = useState({
     visible: false,
     title: '',
@@ -59,6 +73,20 @@ export default function ProfileScreen() {
 
   const showInfo = (title, message) => {
     setInfoModal({ visible: true, title, message });
+  };
+
+  // Load notification preference
+  useEffect(() => {
+    AsyncStorage.getItem(NOTIFICATIONS_KEY).then((val) => {
+      if (val !== null) {
+        setNotificationsEnabled(val === 'true');
+      }
+    });
+  }, []);
+
+  const toggleNotifications = async (value) => {
+    setNotificationsEnabled(value);
+    await AsyncStorage.setItem(NOTIFICATIONS_KEY, value ? 'true' : 'false');
   };
 
   useFocusEffect(
@@ -72,9 +100,12 @@ export default function ProfileScreen() {
   const name = displayName(user);
   const contact = displayContact(user);
   const initials = getInitials(name, user?.email);
+  const avatarUrl = getAvatarUrl(user);
   const signedIn = !!(isAuthenticated || session || user);
   const languagesList = Array.isArray(languages) ? languages : [];
-  const currentLang = languagesList.find((l) => l.code === language) || languagesList[0] || { code: 'en', native: 'English', name: 'English' };
+  const currentLang =
+    languagesList.find((l) => l.code === language) ||
+    languagesList[0] || { code: 'en', native: 'English', name: 'English' };
   const p = t?.profile || {};
 
   const handleLogoutPress = () => {
@@ -93,34 +124,106 @@ export default function ProfileScreen() {
     }
   };
 
+  const privacyPolicyText = `Privacy Policy – MedScan
+
+Last updated: August 2026
+
+MedScan respects your privacy. This policy explains how we collect, use, and protect your information.
+
+1. Information We Collect
+• Account information (name, email, phone, age) when you sign up
+• Profile picture from Google / Facebook (if you allow)
+• Scanned images of medicines and lab reports (stored only on your device unless you enable cloud sync)
+• App usage data to improve the service
+
+2. How We Use Your Information
+• To provide medicine and report explanations
+• To personalize your experience
+• To send important notifications (if enabled)
+• To improve app performance and features
+
+3. Data Storage
+• Scan images and results are stored locally on your device by default
+• Account data is stored securely with Supabase
+• We do not sell your personal data to third parties
+
+4. Third-Party Services
+We use:
+• Supabase (authentication & database)
+• Google / Facebook (login)
+• Google Gemini (AI analysis)
+
+These services have their own privacy policies.
+
+5. Your Rights
+You can:
+• Update or delete your profile
+• Turn off notifications
+• Request deletion of your account data
+• Contact us for any privacy-related questions
+
+6. Contact
+For privacy questions: support@medscan.app
+
+By using MedScan, you agree to this Privacy Policy.`;
+
+  const termsText = `Terms of Service – MedScan
+
+Last updated: August 2026
+
+Please read these terms carefully before using MedScan.
+
+1. Not Medical Advice
+MedScan provides general, non-diagnostic explanations of medicines and lab reports. It is NOT a substitute for professional medical advice, diagnosis, or treatment. Always consult a qualified doctor.
+
+2. User Responsibilities
+• You are responsible for the accuracy of images you scan
+• Do not use the app for emergency medical decisions
+• You must be 15 years or older to use this app
+
+3. Account
+• You are responsible for keeping your login credentials safe
+• You may not share your account with others
+• We may suspend accounts that misuse the service
+
+4. Intellectual Property
+All content, design, and code of MedScan belong to the developers. You may not copy or redistribute the app without permission.
+
+5. Limitation of Liability
+MedScan and its developers are not responsible for any decisions made based on the information provided by the app.
+
+6. Changes
+We may update these terms from time to time. Continued use of the app means you accept the updated terms.
+
+7. Contact
+Questions? Email us at support@medscan.app`;
+
   const rows = [
-    {
-      key: 'notifications',
-      label: p.notifications || 'Notifications',
-      onPress: () => showInfo(p.notifications || 'Notifications', 'Coming soon'),
-    },
     {
       key: 'privacy',
       label: p.privacy || 'Privacy Policy',
-      onPress: () => showInfo(p.privacy || 'Privacy', 'Your data is safe on device.'),
+      onPress: () => showInfo('Privacy Policy', privacyPolicyText),
     },
     {
       key: 'terms',
       label: p.terms || 'Terms of Service',
-      onPress: () =>
-        showInfo(p.terms || 'Terms', 'For reference only. Consult a doctor.'),
+      onPress: () => showInfo('Terms of Service', termsText),
     },
     {
       key: 'rate',
       label: p.rate || 'Rate App',
-      onPress: () => showInfo(p.rate || 'Rate App', 'Play Store link soon.'),
+      onPress: () =>
+        showInfo(
+          'Rate MedScan',
+          'Thank you for using MedScan!\n\nIf you like the app, please rate us on the Play Store. Your feedback helps us improve.',
+        ),
     },
     {
       key: 'support',
       label: p.support || 'Support',
       onPress: () => {
         Linking.openURL('mailto:support@medscan.app').catch(() => {
-          showInfo(p.support || 'Support', 'support@medscan.app');
+          showInfo('Support', 'Email us at: support@medscan.app');
         });
       },
     },
@@ -154,16 +257,27 @@ export default function ProfileScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.card}>
+          {/* Profile Info */}
           <View style={styles.profileBlock}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{initials}</Text>
-            </View>
+            {avatarUrl ? (
+              <Image
+                source={{ uri: avatarUrl }}
+                style={styles.avatarImage}
+                resizeMode="cover"
+              />
+            ) : (
+              <View style={styles.avatar}>
+                <Text style={styles.avatarText}>{initials}</Text>
+              </View>
+            )}
+
             <Text style={styles.name} numberOfLines={1}>
               {name}
             </Text>
             <Text style={styles.contact} numberOfLines={1}>
               {contact}
             </Text>
+
             <View
               style={[
                 styles.statusChip,
@@ -176,22 +290,50 @@ export default function ProfileScreen() {
                   signedIn ? styles.statusInText : styles.statusGuestText,
                 ]}
               >
-                {signedIn ? p.signedIn || 'Signed in' : p.guest || 'Guest mode'}
+                {signedIn
+                  ? p.signedIn || 'Signed in'
+                  : p.guest || 'Guest mode'}
               </Text>
             </View>
           </View>
 
+          {/* Stats */}
           <View style={styles.statBox}>
             <Text style={styles.statNumber}>{scanCount}</Text>
             <Text style={styles.statLabel}>{p.totalScans || 'Total Scans'}</Text>
           </View>
 
+          {/* Language */}
           <Text style={styles.sectionTitle}>{p.language || 'Language'}</Text>
           <Pressable style={styles.langBtn} onPress={() => setLangModal(true)}>
             <Text style={styles.langBtnText}>{currentLang.native}</Text>
-            <Text style={styles.langBtnHint}>{p.selectLanguage || 'Select'}</Text>
+            <Text style={styles.langBtnHint}>
+              {p.selectLanguage || 'Select'}
+            </Text>
           </Pressable>
 
+          {/* Notifications Toggle */}
+          <Text style={[styles.sectionTitle, { marginTop: 20 }]}>
+            {p.notifications || 'Notifications'}
+          </Text>
+          <View style={styles.notificationRow}>
+            <View>
+              <Text style={styles.notificationLabel}>
+                {notificationsEnabled ? 'On' : 'Off'}
+              </Text>
+              <Text style={styles.notificationHint}>
+                Receive important updates & reminders
+              </Text>
+            </View>
+            <Switch
+              value={notificationsEnabled}
+              onValueChange={toggleNotifications}
+              trackColor={{ false: '#D1D5DB', true: colors.primary }}
+              thumbColor="#FFFFFF"
+            />
+          </View>
+
+          {/* Settings */}
           <Text style={[styles.sectionTitle, { marginTop: 20 }]}>
             {p.settings || 'Settings'}
           </Text>
@@ -222,6 +364,7 @@ export default function ProfileScreen() {
         </View>
       </ScrollView>
 
+      {/* Info Modal (Privacy / Terms etc) */}
       <AppModal
         visible={infoModal.visible}
         type="info"
@@ -233,6 +376,7 @@ export default function ProfileScreen() {
         onCancel={() => setInfoModal((m) => ({ ...m, visible: false }))}
       />
 
+      {/* Logout Confirm */}
       <AppModal
         visible={logoutVisible}
         type="confirm"
@@ -244,6 +388,7 @@ export default function ProfileScreen() {
         onCancel={() => setLogoutVisible(false)}
       />
 
+      {/* Loading */}
       <AppModal
         visible={loadingVisible}
         type="loading"
@@ -252,6 +397,7 @@ export default function ProfileScreen() {
         showCancel={false}
       />
 
+      {/* Language Modal */}
       <Modal
         visible={langModal}
         animationType="slide"
@@ -259,7 +405,9 @@ export default function ProfileScreen() {
         onRequestClose={() => setLangModal(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalSheet, { paddingBottom: insets.bottom + 16 }]}>
+          <View
+            style={[styles.modalSheet, { paddingBottom: insets.bottom + 16 }]}
+          >
             <Text style={styles.modalTitle}>
               {p.selectLanguage || 'Select Language'}
             </Text>
@@ -278,7 +426,12 @@ export default function ProfileScreen() {
                     style={[styles.langRow, active && styles.langRowActive]}
                   >
                     <View>
-                      <Text style={[styles.langNative, active && styles.langActiveText]}>
+                      <Text
+                        style={[
+                          styles.langNative,
+                          active && styles.langActiveText,
+                        ]}
+                      >
                         {item.native}
                       </Text>
                       <Text style={styles.langName}>{item.name}</Text>
@@ -353,6 +506,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 12,
   },
+  avatarImage: {
+    width: 76,
+    height: 76,
+    borderRadius: 24,
+    marginBottom: 12,
+    backgroundColor: colors.primary,
+  },
   avatarText: { fontSize: 28, fontWeight: '700', color: '#FFFFFF' },
   name: {
     fontSize: 20,
@@ -404,6 +564,27 @@ const styles = StyleSheet.create({
     color: colors.textDark || '#1F2937',
   },
   langBtnHint: { fontSize: 13, color: colors.primary, fontWeight: '600' },
+  notificationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border || '#E5EAEA',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  notificationLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.textDark || '#1F2937',
+  },
+  notificationHint: {
+    fontSize: 12,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
   settingsBox: {
     borderRadius: 16,
     borderWidth: 1,
@@ -420,38 +601,41 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.border || '#E5EAEA',
   },
-  rowPressed: { backgroundColor: '#F8FAFC' },
+  rowPressed: {
+    backgroundColor: '#F8FAFC',
+  },
   rowLabel: {
-    flex: 1,
     fontSize: 15,
     fontWeight: '500',
     color: colors.textDark || '#1F2937',
   },
-  destructiveText: { color: colors.danger },
+  destructiveText: {
+    color: '#D64545',
+  },
   version: {
-    marginTop: 20,
     textAlign: 'center',
+    marginTop: 24,
     fontSize: 12,
     color: colors.textMuted,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: 'rgba(0,0,0,0.4)',
     justifyContent: 'flex-end',
   },
   modalSheet: {
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    maxHeight: '70%',
     paddingTop: 20,
     paddingHorizontal: 20,
+    maxHeight: '60%',
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: '700',
     color: colors.textDark || '#1F2937',
-    marginBottom: 12,
+    marginBottom: 16,
     textAlign: 'center',
   },
   langRow: {
@@ -462,17 +646,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 12,
   },
-  langRowActive: { backgroundColor: colors.mint || '#E6F5F2' },
+  langRowActive: {
+    backgroundColor: colors.mint || '#E6F5F2',
+  },
   langNative: {
     fontSize: 16,
     fontWeight: '600',
     color: colors.textDark || '#1F2937',
   },
-  langActiveText: { color: colors.primaryDark },
-  langName: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
-  check: { fontSize: 18, color: colors.primary, fontWeight: '700' },
+  langActiveText: {
+    color: colors.primaryDark,
+  },
+  langName: {
+    fontSize: 13,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+  check: {
+    fontSize: 18,
+    color: colors.primary,
+    fontWeight: '700',
+  },
   modalClose: {
-    marginTop: 8,
+    marginTop: 12,
     paddingVertical: 14,
     alignItems: 'center',
   },
