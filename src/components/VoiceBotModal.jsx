@@ -1,643 +1,143 @@
-import React, { useEffect, useRef, useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  Modal,
-  Platform,
-  PermissionsAndroid,
-  Pressable,
-  TextInput,
-  ActivityIndicator,
-  ScrollView,
-} from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Voice from '@react-native-voice/voice';
-import Tts from 'react-native-tts';
-import Config from 'react-native-config';
+const askGemini = async (question) => {
+  if (!question?.trim() || processingRef.current) return;
 
-const GEMINI_MODEL = 'gemini-3.1-flash-lite';
+  processingRef.current = true;
+  setStatus('thinking');
+  setError('');
+  setTranscript(question);
+  setReply('');
 
-const SYSTEM_PROMPT = `You are MedScan voice assistant for medicines and lab reports only.
+  try {
+    const key = String(Config.GEMINI_API_KEY || '').trim();
+    if (!key) {
+      setError('GEMINI_API_KEY missing in .env');
+      setStatus('idle');
+      processingRef.current = false;
+      return;
+    }
 
-LANGUAGE RULE (STRICT - MOST IMPORTANT):
-- Reply in the EXACT same language the user spoke.
-- If user spoke Pashto (پښتو) → reply 100% in Pashto.
-- If user spoke Urdu / Roman Urdu → reply in Urdu.
-- If user spoke Hindi → reply in Hindi.
-- If user spoke English → reply in English.
-- Never mix languages. Never force English if user used another language.
+    const lang = detectLang(question);
 
-CONTENT RULES:
-- Only answer medical questions related to the scanned medicine or lab report.
-- If user asks how to use the medicine (kaise use karein / څنګه استعمال کړم / کیسے استعمال کریں) → give clear, simple general guidance from the scan context. Never invent exact dose numbers. Always remind: "package یا ڈاکٹر سے confirm کریں".
-- Never invent dosage. Never diagnose any disease.
-- Keep answers short (2-4 sentences) so they are good for voice.
-- Use simple everyday words.
-- No asterisks, no markdown, no bullet points.`;
+    // Build prompt
+    const contextText = scanContext
+      ? `Scan context:\n${typeof scanContext === 'string' ? scanContext : JSON.stringify(scanContext)}`
+      : 'No previous scan available.';
 
-function detectLang(text) {
-  const original = text || '';
-  const t = original.toLowerCase().trim();
+    const prompt = `${SYSTEM_PROMPT}
 
-  // Pashto unique letters (Arabic script)
-  const pashtoChars = /[ټډړږښڅځڼ]/;
-  // Common Pashto words (Arabic script)
-  const pashtoWords =
-    /\b(ستا|ستاسو|مننه|شکریه|پښتو|درمل|څنګه|ولې|ښه|نه|هو|زه|ته|موږ|تاسو|دی|ده|دي|وی|که|چې|لپاره|استعمال|څنګه استعمال|څه|ولے|کړم|کړئ)\b/;
-  // Roman Pashto
-  const romanPashto =
-    /\b(sta|staso|manana|shukria|pashto|dawai|daway|tsanga|wale|kha|na|ho|za|ta|mung|taso|dai|da|di|wi|ka|che|lapara|estemal|tsanga estemal)\b/;
+${contextText}
 
-  if (pashtoChars.test(original) || pashtoWords.test(original) || romanPashto.test(t)) {
-    return 'ps';
-  }
+User question: ${question}
 
-  // Arabic script (Urdu / Pashto) — Pashto already checked above
-  if (/[\u0600-\u06FF]/.test(original)) {
-    return 'ur';
-  }
+Reply in the same language the user used. Keep answer short (2-4 sentences).`;
 
-  // Roman Urdu
-  if (
-    /\b(hai|hain|kya|nahi|mujhe|meri|dawai|dawaa|bukhar|sardi|dard|kaise|use|karun|karo|batao|bataiye|kitna|kitni)\b/.test(
-      t,
-    )
-  ) {
-    return 'ur';
-  }
+    // Call Gemini
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${key}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+        }),
+      },
+    );
 
-  // Hindi (Devanagari)
-  if (/[अ-ह]/.test(original)) {
-    return 'hi';
-  }
+    const data = await res.json();
+    console.log('Gemini response:', JSON.stringify(data)?.slice(0, 300));
 
-  return 'en';
-}
+    if (data?.error) {
+      setError(data.error.message || 'Gemini error');
+      setStatus('idle');
+      processingRef.current = false;
+      return;
+    }
 
-export default function VoiceBotModal({ visible, onClose, scanContext }) {
-  const insets = useSafeAreaInsets();
-  const [status, setStatus] = useState('idle'); // idle | listening | thinking | speaking
-  const [transcript, setTranscript] = useState('');
-  const [reply, setReply] = useState('');
-  const [error, setError] = useState('');
-  const [typed, setTyped] = useState('');
-  const [showType, setShowType] = useState(false);
+    const answer =
+      data?.candidates?.[0]?.content?.parts?.[0]?.text ||
+      (lang === 'ps'
+        ? 'ځواب نشو موندلی.'
+        : lang === 'ur'
+        ? 'جواب نہیں مل سکا۔'
+        : 'Could not get answer.');
 
-  const cancelled = useRef(false);
-  const partialRef = useRef('');
-  const finalRef = useRef('');
-  const processingRef = useRef(false);
-  const listeningRef = useRef(false);
+    const clean = String(answer).replace(/\*/g, '').trim();
+    setReply(clean);
+    setStatus('speaking');
 
-  const stopAll = async () => {
-    listeningRef.current = false;
+    // ===== TTS Voice Setup =====
     try {
-      await Voice.stop();
-    } catch (_) {}
-    try {
-      await Tts.stop();
-    } catch (_) {}
-  };
+      const voices = await Tts.voices();
+      let selectedVoice = null;
 
-  const askGemini = async (question) => {
-    if (!question?.trim() || processingRef.current) return;
-
-    processingRef.current = true;
-    setStatus('thinking');
-    setError('');
-    setTranscript(question);
-    setReply('');
-
-    try {
-      const key = String(Config.GEMINI_API_KEY || '').trim();
-      if (!key) {
-        setError('GEMINI_API_KEY missing in .env');
-        setStatus('idle');
-        processingRef.current = false;
-        return;
+      if (lang === 'ps') {
+        selectedVoice =
+          voices.find((v) => v.language?.startsWith('ur')) ||
+          voices.find((v) => v.language?.startsWith('hi')) ||
+          voices.find((v) => v.language?.startsWith('en'));
+      } else if (lang === 'ur') {
+        selectedVoice =
+          voices.find((v) => v.language?.startsWith('ur')) ||
+          voices.find((v) => v.language?.startsWith('hi')) ||
+          voices.find((v) => v.language?.startsWith('en'));
+      } else if (lang === 'hi') {
+        selectedVoice =
+          voices.find((v) => v.language?.startsWith('hi')) ||
+          voices.find((v) => v.language?.startsWith('en'));
+      } else {
+        selectedVoice =
+          voices.find((v) => v.language === 'en-US' || v.language?.startsWith('en')) ||
+          voices[0];
       }
 
-      const lang = detectLang(question);
-      const langName =
-        lang === 'ur'
-          try {
-            try {
-              const voices = await Tts.voices();
-
-              let selectedVoice = null;
-
-              if (lang === 'ps') {
-                // Pashto → prefer Urdu voice, then Hindi, then English
-                selectedVoice =
-                  voices.find(v => v.language?.startsWith('ur')) ||
-                  voices.find(v => v.language?.startsWith('hi')) ||
-                  voices.find(v => v.language?.startsWith('en'));
-              } else if (lang === 'ur') {
-                // Urdu
-                selectedVoice =
-                  voices.find(v => v.language?.startsWith('ur')) ||
-                  voices.find(v => v.language?.startsWith('hi')) ||
-                  voices.find(v => v.language?.startsWith('en'));
-              } else if (lang === 'hi') {
-                // Hindi
-                selectedVoice =
-                  voices.find(v => v.language?.startsWith('hi')) ||
-                  voices.find(v => v.language?.startsWith('en'));
-              } else {
-                // English
-                selectedVoice =
-                  voices.find(v => v.language === 'en-US' || v.language?.startsWith('en')) ||
-                  voices[0];
-              }
-
-              if (selectedVoice?.id) {
-                await Tts.setDefaultVoice(selectedVoice.id);
-              }
-            } catch (_) {
-              // ignore voice enumeration errors and continue to language fallbacks
-            }
-
-            // Set language
-            if (lang === 'ps' || lang === 'ur') {
-              try {
-                await Tts.setDefaultLanguage('ur-PK');
-              } catch (_) {
-                try {
-                  await Tts.setDefaultLanguage('hi-IN');
-                } catch (_) {
-                  await Tts.setDefaultLanguage('en-US');
-                }
-              }
-            } else if (lang === 'hi') {
-              try {
-                await Tts.setDefaultLanguage('hi-IN');
-              } catch (_) {
-                await Tts.setDefaultLanguage('en-US');
-              }
-            } else {
-              await Tts.setDefaultLanguage('en-US');
-            }
-
-            // Different rate & pitch per language
-            if (lang === 'ps') {
-              await Tts.setDefaultRate(0.46);
-              await Tts.setDefaultPitch(0.95);
-            } else if (lang === 'ur') {
-              await Tts.setDefaultRate(0.48);
-              await Tts.setDefaultPitch(1.0);
-            } else {
-              await Tts.setDefaultRate(0.50);
-              await Tts.setDefaultPitch(1.05);
-            }
-          } catch (_) {}
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-          }),
-        },
-      );
-
-      const data = await res.json();
-      console.log('Gemini response:', JSON.stringify(data)?.slice(0, 300));
-
-      if (data?.error) {
-        setError(data.error.message || 'Gemini error');
-        setStatus('idle');
-        processingRef.current = false;
-        return;
+      if (selectedVoice?.id) {
+        await Tts.setDefaultVoice(selectedVoice.id);
       }
 
-      const answer =
-        data?.candidates?.[0]?.content?.parts?.[0]?.text ||
-        (lang === 'ps'
-          ? 'ځواب نشو موندلی.'
-          : lang === 'ur'
-          ? 'جواب نہیں مل سکا۔'
-          : 'Could not get answer.');
-
-      const clean = String(answer).replace(/\*/g, '').trim();
-      setReply(clean);
-      setStatus('speaking');
-
-      try {
-        if (lang === 'ps' || lang === 'ur') {
-          try {
-            await Tts.setDefaultLanguage('ur-PK');
-          } catch (_) {
-            try {
-              await Tts.setDefaultLanguage('hi-IN');
-            } catch (__) {
-              await Tts.setDefaultLanguage('en-US');
-            }
-          }
-        } else if (lang === 'hi') {
+      // Set language
+      if (lang === 'ps' || lang === 'ur') {
+        try {
+          await Tts.setDefaultLanguage('ur-PK');
+        } catch (_) {
           try {
             await Tts.setDefaultLanguage('hi-IN');
-          } catch (_) {
+          } catch (__) {
             await Tts.setDefaultLanguage('en-US');
           }
-        } else {
+        }
+      } else if (lang === 'hi') {
+        try {
+          await Tts.setDefaultLanguage('hi-IN');
+        } catch (_) {
           await Tts.setDefaultLanguage('en-US');
         }
+      } else {
+        await Tts.setDefaultLanguage('en-US');
+      }
+
+      // Rate & Pitch
+      if (lang === 'ps') {
+        await Tts.setDefaultRate(0.46);
+        await Tts.setDefaultPitch(0.95);
+      } else if (lang === 'ur') {
         await Tts.setDefaultRate(0.48);
-      } catch (_) {}
-
-      if (!cancelled.current) {
-        Tts.speak(clean);
+        await Tts.setDefaultPitch(1.0);
+      } else {
+        await Tts.setDefaultRate(0.5);
+        await Tts.setDefaultPitch(1.05);
       }
-    } catch (e) {
-      console.log('Gemini fetch error', e);
-      setError('Network error. Internet check karein.');
-      setStatus('idle');
-    } finally {
-      processingRef.current = false;
-    }
-  };
-
-  const startListening = async () => {
-    if (processingRef.current || listeningRef.current) return;
-
-    setError('');
-    setTranscript('');
-    setReply('');
-    partialRef.current = '';
-    finalRef.current = '';
-
-    if (Platform.OS === 'android') {
-      const g = await PermissionsAndroid.request(
-        PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
-      );
-      if (g !== PermissionsAndroid.RESULTS.GRANTED) {
-        setError('Mic permission allow karein');
-        return;
-      }
+    } catch (_) {
+      // ignore TTS setup errors
     }
 
-    try {
-      await Tts.stop();
-      listeningRef.current = true;
-      setStatus('listening');
-
-      // en-US is most reliable on Android for Roman Urdu + English
-      // Pashto/Urdu script also often works through en-US
-      try {
-        await Voice.start('en-US', {
-          EXTRA_PARTIAL_RESULTS: true,
-          REQUEST_PERMISSIONS_AUTO: true,
-        });
-      } catch (_) {
-        try {
-          await Voice.start('ur-PK');
-        } catch (__) {
-          await Voice.start('en-US');
-        }
-      }
-    } catch (e) {
-      console.log('start listen error', e);
-      listeningRef.current = false;
-      setStatus('idle');
-      setError('Mic start nahi hua');
+    if (!cancelled.current) {
+      Tts.speak(clean);
     }
-  };
-
-  const stopListening = async () => {
-    listeningRef.current = false;
-    try {
-      await Voice.stop();
-    } catch (_) {}
-
-    const text = (finalRef.current || partialRef.current || '').trim();
-    if (text) {
-      await askGemini(text);
-    } else {
-      setStatus('idle');
-      setError('Kuch sunai nahi diya. Phir se bolo ya type karo.');
-    }
-  };
-
-  useEffect(() => {
-    if (!visible) return;
-
-    cancelled.current = false;
-    processingRef.current = false;
-    listeningRef.current = false;
+  } catch (e) {
+    console.log('Gemini fetch error', e);
+    setError('Network error. Internet check karein.');
     setStatus('idle');
-    setTranscript('');
-    setReply('');
-    setError('');
-    setTyped('');
-    setShowType(false);
-
-    Voice.onSpeechPartialResults = (e) => {
-      const t = e?.value?.[0];
-      if (t) {
-        partialRef.current = t;
-        setTranscript(t);
-      }
-    };
-
-    Voice.onSpeechResults = (e) => {
-      const t = e?.value?.[0];
-      if (t) {
-        finalRef.current = t;
-        setTranscript(t);
-      }
-    };
-
-    Voice.onSpeechError = (e) => {
-      console.log('Speech error', e);
-      if (cancelled.current || processingRef.current) return;
-
-      listeningRef.current = false;
-      const code = String(e?.error?.code || '');
-      // 7 = no match
-      if (code === '7') {
-        setStatus('idle');
-        setError('Samajh nahi aaya. Phir se bolo ya type karo.');
-        return;
-      }
-      setStatus('idle');
-      setError('Mic error. Type karke pooch sakte ho.');
-    };
-
-    Voice.onSpeechEnd = () => {
-      // handled by manual stop
-    };
-
-    const onTtsFinish = () => {
-      if (!cancelled.current) setStatus('idle');
-    };
-
-    Tts.addEventListener('tts-finish', onTtsFinish);
-    Tts.addEventListener('tts-cancel', onTtsFinish);
-
-    return () => {
-      cancelled.current = true;
-      listeningRef.current = false;
-      Voice.destroy().then(Voice.removeAllListeners).catch(() => {});
-      Tts.stop();
-      Tts.removeAllListeners('tts-finish');
-      Tts.removeAllListeners('tts-cancel');
-    };
-  }, [visible]);
-
-  const onMainPress = async () => {
-    if (status === 'listening') {
-      await stopListening();
-    } else if (status === 'idle' || status === 'speaking') {
-      await stopAll();
-      await startListening();
-    }
-  };
-
-  const onSendTyped = async () => {
-    const q = typed.trim();
-    if (!q) return;
-    setShowType(false);
-    setTyped('');
-    await stopAll();
-    await askGemini(q);
-  };
-
-  const handleClose = async () => {
-    cancelled.current = true;
-    await stopAll();
-    onClose();
-  };
-
-  return (
-    <Modal visible={visible} animationType="slide" onRequestClose={handleClose}>
-      <View style={[styles.root, { paddingTop: insets.top + 8 }]}>
-        {/* Header */}
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.title}>MedScan Voice</Text>
-            <Text style={styles.sub}>Pashto · Urdu · English · Type bhi chalega</Text>
-          </View>
-          <Pressable onPress={handleClose} style={styles.closeBtn}>
-            <Text style={styles.closeText}>✕</Text>
-          </Pressable>
-        </View>
-
-        <ScrollView
-          contentContainerStyle={styles.body}
-          keyboardShouldPersistTaps="handled"
-        >
-          {/* Status ring */}
-          <View
-            style={[
-              styles.ring,
-              status === 'listening' && styles.ringListen,
-              status === 'thinking' && styles.ringThink,
-              status === 'speaking' && styles.ringSpeak,
-            ]}
-          >
-            <Text style={styles.micIcon}>
-              {status === 'thinking'
-                ? '💭'
-                : status === 'speaking'
-                ? '🔊'
-                : '🎤'}
-            </Text>
-          </View>
-
-          <Text style={styles.statusText}>
-            {status === 'idle' && 'Mic dabao aur bolo'}
-            {status === 'listening' && 'Listening... bolo phir Stop dabao'}
-            {status === 'thinking' && 'Soch raha hai...'}
-            {status === 'speaking' && 'Jawab de raha hai...'}
-          </Text>
-
-          {/* Transcript / Reply */}
-          <View style={styles.card}>
-            {!!transcript && (
-              <>
-                <Text style={styles.label}>You</Text>
-                <Text style={styles.text}>{transcript}</Text>
-              </>
-            )}
-            {!!transcript && !!reply && <View style={styles.divider} />}
-            {!!reply && (
-              <>
-                <Text style={[styles.label, styles.labelBot]}>MedScan</Text>
-                <Text style={styles.text}>{reply}</Text>
-              </>
-            )}
-            {!!error && <Text style={styles.err}>{error}</Text>}
-            {!transcript && !reply && !error && (
-              <Text style={styles.hint}>
-                Mic se bolo ya neeche Type dabao. Pashto / Urdu / English sab chalega.
-              </Text>
-            )}
-          </View>
-
-          {/* Type box */}
-          {showType && (
-            <View style={styles.typeBox}>
-              <TextInput
-                style={styles.input}
-                placeholder="Apna sawal type karo (Pashto / Urdu / English)..."
-                placeholderTextColor="#9CA3AF"
-                value={typed}
-                onChangeText={setTyped}
-                multiline
-              />
-              <Pressable style={styles.sendBtn} onPress={onSendTyped}>
-                <Text style={styles.sendText}>Send</Text>
-              </Pressable>
-            </View>
-          )}
-        </ScrollView>
-
-        {/* Buttons */}
-        <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
-          {status === 'thinking' ? (
-            <ActivityIndicator color="#0E9F8E" size="large" />
-          ) : (
-            <Pressable
-              style={[
-                styles.mainBtn,
-                status === 'listening' && styles.mainBtnStop,
-              ]}
-              onPress={onMainPress}
-            >
-              <Text style={styles.mainBtnText}>
-                {status === 'listening'
-                  ? '⏹️  Stop & Get Answer'
-                  : '🎤  Start Talking'}
-              </Text>
-            </Pressable>
-          )}
-
-          <Pressable
-            style={styles.typeBtn}
-            onPress={() => setShowType((v) => !v)}
-          >
-            <Text style={styles.typeBtnText}>
-              {showType ? 'Hide Type' : '⌨️  Type instead'}
-            </Text>
-          </Pressable>
-        </View>
-      </View>
-    </Modal>
-  );
-}
-
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#0B1220' },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    paddingHorizontal: 18,
-    paddingBottom: 8,
-  },
-  title: { fontSize: 22, fontWeight: '700', color: '#fff' },
-  sub: { fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 4 },
-  closeBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  closeText: { color: '#fff', fontSize: 18 },
-  body: {
-    paddingHorizontal: 18,
-    alignItems: 'center',
-    paddingBottom: 20,
-  },
-  ring: {
-    width: 140,
-    height: 140,
-    borderRadius: 70,
-    borderWidth: 3,
-    borderColor: 'rgba(14,159,142,0.35)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  ringListen: {
-    borderColor: '#0E9F8E',
-    backgroundColor: 'rgba(14,159,142,0.12)',
-  },
-  ringThink: { borderColor: '#FF7A59' },
-  ringSpeak: { borderColor: '#63dac7' },
-  micIcon: { fontSize: 40 },
-  statusText: {
-    marginTop: 16,
-    fontSize: 16,
-    fontWeight: '600',
-    color: 'rgba(255,255,255,0.85)',
-    textAlign: 'center',
-  },
-  card: {
-    width: '100%',
-    marginTop: 20,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    padding: 14,
-    minHeight: 80,
-  },
-  label: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: 'rgba(255,255,255,0.45)',
-    textTransform: 'uppercase',
-  },
-  labelBot: { color: '#63dac7' },
-  text: {
-    fontSize: 15,
-    lineHeight: 22,
-    color: 'rgba(255,255,255,0.9)',
-    marginTop: 4,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    marginVertical: 10,
-  },
-  err: { color: '#F87171', fontSize: 13, marginTop: 6 },
-  hint: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.4)',
-    textAlign: 'center',
-  },
-  typeBox: { width: '100%', marginTop: 12 },
-  input: {
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderRadius: 12,
-    padding: 12,
-    color: '#fff',
-    minHeight: 70,
-    textAlignVertical: 'top',
-  },
-  sendBtn: {
-    marginTop: 8,
-    backgroundColor: '#0E9F8E',
-    borderRadius: 12,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  sendText: { color: '#fff', fontWeight: '700', fontSize: 15 },
-  footer: {
-    paddingHorizontal: 18,
-    paddingTop: 8,
-    gap: 10,
-  },
-  mainBtn: {
-    height: 54,
-    borderRadius: 27,
-    backgroundColor: '#0E9F8E',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  mainBtnStop: { backgroundColor: '#D64545' },
-  mainBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  typeBtn: { alignItems: 'center', paddingVertical: 8 },
-  typeBtnText: { color: 'rgba(255,255,255,0.6)', fontSize: 14 },
-});
+  } finally {
+    processingRef.current = false;
+  }
+};

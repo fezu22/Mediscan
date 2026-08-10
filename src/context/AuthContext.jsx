@@ -162,21 +162,17 @@ export function AuthProvider({ children }) {
       }
     };
 
+    // FIXED: timeout hata diya — asli session aane tak wait karega
     const boot = async () => {
       try {
-        const timeout = new Promise((resolve) =>
-          setTimeout(() => resolve({ data: { session: null } }), 1200),
-        );
-        const result = await Promise.race([
-          supabase.auth.getSession(),
-          timeout,
-        ]);
+        const result = await supabase.auth.getSession();
         if (!mounted) return;
         const currentSession = result?.data?.session ?? null;
         setSession(currentSession);
         setUser(currentSession?.user ?? null);
       } catch (e) {
         console.log('Boot session error:', e);
+        if (!mounted) return;
         setSession(null);
         setUser(null);
       } finally {
