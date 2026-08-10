@@ -63,41 +63,47 @@ export default function CompleteProfileScreen() {
     try {
       setLoading(true);
 
-      if (user?.id && !String(user.id).startsWith('local-')) {
-        const { data, error } = await supabase.auth.updateUser({
-          data: {
-            full_name: name.trim(),
-            age: Number(age),
-            phone: phone.trim(),
-            profileComplete: true,
-          },
-        });
-        if (error) throw error;
+      const { data, error } = await supabase.auth.updateUser({
+        data: {
+          full_name: name.trim(),
+          age: Number(age),
+          phone: phone.trim(),
+          profileComplete: true,
+        },
+      });
 
-        signInStub({
-          ...data?.user,
-          name: name.trim(),
+      if (error) throw error;
+
+      if (user?.id && !String(user.id).startsWith('local-')) {
+        await supabase.from('profiles').upsert({
+          id: user.id,
+          full_name: name.trim(),
           age: Number(age),
           phone: phone.trim(),
-          profileComplete: true,
-          user_metadata: {
-            ...(data?.user?.user_metadata || {}),
-            full_name: name.trim(),
-            age: Number(age),
-            phone: phone.trim(),
-            profileComplete: true,
-          },
-        });
-      } else {
-        signInStub({
-          name: name.trim(),
-          age: Number(age),
-          phone: phone.trim(),
-          profileComplete: true,
+          updated_at: new Date().toISOString(),
         });
       }
+
+      signInStub({
+        ...data?.user,
+        name: name.trim(),
+        age: Number(age),
+        phone: phone.trim(),
+        profileComplete: true,
+        user_metadata: {
+          ...(data?.user?.user_metadata || {}),
+          full_name: name.trim(),
+          age: Number(age),
+          phone: phone.trim(),
+          profileComplete: true,
+        },
+      });
     } catch (error) {
-      showModal({ type: 'error', title: 'Error', message: error?.message || 'Could not save profile' });
+      showModal({
+        type: 'error',
+        title: 'Error',
+        message: error?.message || 'Could not save profile',
+      });
     } finally {
       setLoading(false);
     }
@@ -120,6 +126,7 @@ export default function CompleteProfileScreen() {
         onConfirm={hideModal}
         onCancel={hideModal}
       />
+
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={{ flex: 1 }}

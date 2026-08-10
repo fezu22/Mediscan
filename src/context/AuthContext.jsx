@@ -6,8 +6,7 @@ import Config from 'react-native-config';
 
 // Singleton context — prevents duplicate-module crash with Metro/@ alias
 const globalKey = '__MEDSCAN_AUTH_CONTEXT__';
-const AuthContext =
-  globalThis[globalKey] || createContext(undefined);
+const AuthContext = globalThis[globalKey] || createContext(undefined);
 if (!globalThis[globalKey]) {
   globalThis[globalKey] = AuthContext;
 }
@@ -73,6 +72,45 @@ function getGoogleSignInErrorMessage(error) {
   return 'Google Sign-In failed. Please try again.';
 }
 
+// Helper: URL se access_token + refresh_token nikaalna
+function extractTokensFromUrl(url) {
+  try {
+    if (!url) return null;
+
+    // Support both hash (#) and query (?) formats
+    const hashIndex = url.indexOf('#');
+    const queryIndex = url.indexOf('?');
+
+    let paramsString = '';
+    if (hashIndex !== -1) {
+      paramsString = url.substring(hashIndex + 1);
+    } else if (queryIndex !== -1) {
+      paramsString = url.substring(queryIndex + 1);
+    }
+
+    if (!paramsString) return null;
+
+    const params = {};
+    paramsString.split('&').forEach((pair) => {
+      const [key, value] = pair.split('=');
+      if (key && value) {
+        params[key] = decodeURIComponent(value);
+      }
+    });
+
+    if (params.access_token && params.refresh_token) {
+      return {
+        access_token: params.access_token,
+        refresh_token: params.refresh_token,
+      };
+    }
+    return null;
+  } catch (e) {
+    console.log('Token extract error:', e);
+    return null;
+  }
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [session, setSession] = useState(null);
@@ -83,14 +121,42 @@ export function AuthProvider({ children }) {
 
     const handleIncomingUrl = async (url) => {
       if (!url) return;
-      if (!url.includes('/auth/v1/callback') && !url.includes('/auth/callback')) return;
+
+      // Facebook / any OAuth deep link handle karo
+      const isAuthCallback =
+        url.includes('/auth/v1/callback') ||
+        url.includes('/auth/callback') ||
+        url.includes('medscan://auth/facebook') ||
+        url.includes('access_token=') ||
+        url.includes('refresh_token=');
+
+      if (!isAuthCallback) return;
 
       try {
+        // Pehle tokens extract karke setSession try karo
+        const tokens = extractTokensFromUrl(url);
+        if (tokens) {
+          const { data, error } = await supabase.auth.setSession({
+            access_token: tokens.access_token,
+            refresh_token: tokens.refresh_token,
+          });
+
+          if (!error && data?.session) {
+            if (!mounted) return;
+            setSession(data.session);
+            setUser(data.session.user ?? null);
+            setLoading(false);
+            return;
+          }
+        }
+
+        // Fallback: normal getSession
         const result = await supabase.auth.getSession();
         const currentSession = result?.data?.session ?? null;
         if (!mounted) return;
         setSession(currentSession);
         setUser(currentSession?.user ?? null);
+        setLoading(false);
       } catch (e) {
         console.log('Deep link session error:', e);
       }
@@ -120,14 +186,18 @@ export function AuthProvider({ children }) {
 
     boot();
 
-    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
-      if (!mounted) return;
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        if (!mounted) return;
+        setSession(session);
+        setUser(session?.user ?? null);
+        setLoading(false);
+      },
+    );
 
-    const linkingSub = Linking.addEventListener('url', ({ url }) => handleIncomingUrl(url));
+    const linkingSub = Linking.addEventListener('url', ({ url }) =>
+      handleIncomingUrl(url),
+    );
     Linking.getInitialURL().then(handleIncomingUrl);
 
     return () => {
@@ -149,11 +219,16 @@ export function AuthProvider({ children }) {
         next.user_metadata = {
           ...(prev?.user_metadata || {}),
           ...(partial.user_metadata || {}),
-          full_name: partial.name || partial.full_name || prev?.user_metadata?.full_name,
+          full_name:
+            partial.name ||
+            partial.full_name ||
+            prev?.user_metadata?.full_name,
           age: partial.age ?? prev?.user_metadata?.age,
           phone: partial.phone ?? prev?.user_metadata?.phone,
           profileComplete:
-            partial.profileComplete ?? prev?.user_metadata?.profileComplete ?? false,
+            partial.profileComplete ??
+            prev?.user_metadata?.profileComplete ??
+            false,
         };
         next.profileComplete = next.user_metadata.profileComplete;
       }
@@ -198,12 +273,16 @@ export function AuthProvider({ children }) {
     const configured = configureGoogleSignIn();
 
     if (!configured) {
-      throw new Error('Google Sign-In setup failed. Check the Google configuration and environment variables.');
+      throw new Error(
+        'Google Sign-In setup failed. Check the Google configuration and environment variables.',
+      );
     }
 
     try {
       if (typeof GoogleSignin.hasPlayServices === 'function') {
-        await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+        await GoogleSignin.hasPlayServices({
+          showPlayServicesUpdateDialog: true,
+        });
       }
       const signInResult = await GoogleSignin.signIn();
       const idToken = signInResult?.idToken || signInResult?.data?.idToken;
@@ -224,16 +303,32 @@ export function AuthProvider({ children }) {
     }
   };
 
+  // ====================== FIXED FACEBOOK AUTH ======================
   const signInWithFacebook = async () => {
     try {
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'facebook',
         options: {
           redirectTo: FACEBOOK_AUTH_REDIRECT,
-          skipBrowserRedirect: false,
+          skipBrowserRedirect: true, // important for React Native
         },
       });
+
       if (error) throw error;
+      if (!data?.url) {
+        throw new Error('No Facebook OAuth URL returned');
+      }
+
+      // Browser open karo
+      const supported = await Linking.canOpenURL(data.url);
+      if (!supported) {
+        throw new Error('Cannot open Facebook login URL');
+      }
+
+      await Linking.openURL(data.url);
+
+      // Note: Session deep link se automatically set ho jayega
+      // (handleIncomingUrl ke through)
       return { success: true, data };
     } catch (error) {
       throw new Error(error?.message || 'Facebook Sign-In failed');

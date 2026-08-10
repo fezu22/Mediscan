@@ -12,10 +12,10 @@ const Stack = createNativeStackNavigator();
 
 function isProfileComplete(user) {
   if (!user) return false;
+  const meta = user.user_metadata || {};
   return !!(
-    user.profileComplete ||
-    user.user_metadata?.profileComplete ||
-    user.user_metadata?.full_name
+    meta.profileComplete === true ||
+    (meta.full_name && meta.age && meta.phone)
   );
 }
 
@@ -31,7 +31,10 @@ export default function RootNavigator() {
   return (
     <NavigationContainer>
       <Stack.Navigator
-        screenOptions={{ headerShown: false, animation: 'fade_from_bottom' }}
+        screenOptions={{
+          headerShown: false,
+          animation: 'fade',
+        }}
       >
         {!isAuthenticated ? (
           <Stack.Screen name="Login" component={LoginScreen} />

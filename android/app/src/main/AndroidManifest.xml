@@ -26,16 +26,21 @@
         android:launchMode="singleTask"
         android:windowSoftInputMode="adjustResize"
         android:exported="true">
+        
+        <!-- Launcher -->
         <intent-filter>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
         </intent-filter>
+
+        <!-- Deep Link for Facebook / Auth -->
         <intent-filter>
             <action android:name="android.intent.action.VIEW" />
             <category android:name="android.intent.category.DEFAULT" />
             <category android:name="android.intent.category.BROWSABLE" />
-            <data android:scheme="medscan" android:host="auth" android:pathPrefix="/callback" />
+            <data android:scheme="medscan" />
         </intent-filter>
+
       </activity>
     </application>
 </manifest>
