@@ -9,18 +9,14 @@ import {
   ScrollView,
   Modal,
   FlatList,
-  Switch,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '@/context/AuthContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { getAllScans } from '@/lib/scanStorage';
 import { colors } from '@/theme/colors';
 import AppModal from '@/components/AppModal';
-
-const NOTIFICATIONS_KEY = '@medscan/notifications_enabled';
 
 function getInitials(name, email) {
   const n = (name || '').trim();
@@ -64,7 +60,6 @@ export default function ProfileScreen() {
   const [langModal, setLangModal] = useState(false);
   const [logoutVisible, setLogoutVisible] = useState(false);
   const [loadingVisible, setLoadingVisible] = useState(false);
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [infoModal, setInfoModal] = useState({
     visible: false,
     title: '',
@@ -75,19 +70,6 @@ export default function ProfileScreen() {
     setInfoModal({ visible: true, title, message });
   };
 
-  // Load notification preference
-  useEffect(() => {
-    AsyncStorage.getItem(NOTIFICATIONS_KEY).then((val) => {
-      if (val !== null) {
-        setNotificationsEnabled(val === 'true');
-      }
-    });
-  }, []);
-
-  const toggleNotifications = async (value) => {
-    setNotificationsEnabled(value);
-    await AsyncStorage.setItem(NOTIFICATIONS_KEY, value ? 'true' : 'false');
-  };
 
   useFocusEffect(
     useCallback(() => {
@@ -316,22 +298,6 @@ Questions? Email us at support@medscan.app`;
           <Text style={[styles.sectionTitle, { marginTop: 20 }]}>
             {p.notifications || 'Notifications'}
           </Text>
-          <View style={styles.notificationRow}>
-            <View>
-              <Text style={styles.notificationLabel}>
-                {notificationsEnabled ? 'On' : 'Off'}
-              </Text>
-              <Text style={styles.notificationHint}>
-                Receive important updates & reminders
-              </Text>
-            </View>
-            <Switch
-              value={notificationsEnabled}
-              onValueChange={toggleNotifications}
-              trackColor={{ false: '#D1D5DB', true: colors.primary }}
-              thumbColor="#FFFFFF"
-            />
-          </View>
 
           {/* Settings */}
           <Text style={[styles.sectionTitle, { marginTop: 20 }]}>
@@ -564,27 +530,6 @@ const styles = StyleSheet.create({
     color: colors.textDark || '#1F2937',
   },
   langBtnHint: { fontSize: 13, color: colors.primary, fontWeight: '600' },
-  notificationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#F8FAFC',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: colors.border || '#E5EAEA',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  notificationLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.textDark || '#1F2937',
-  },
-  notificationHint: {
-    fontSize: 12,
-    color: colors.textMuted,
-    marginTop: 2,
-  },
   settingsBox: {
     borderRadius: 16,
     borderWidth: 1,
