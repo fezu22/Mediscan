@@ -10,7 +10,7 @@ import {
   FlatList,
   Dimensions,
 } from 'react-native';
-import { Lightbulb, User2, Pill, FileText } from 'lucide-react-native';
+import { Lightbulb, ScanLine } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Card from '@/components/Card';
@@ -34,6 +34,17 @@ const BANNERS = [
   { id: 'verify', image: require('../../assets/Banners/banner_verify.jpg') },
 ];
 
+function getInitials(name, email) {
+  const n = (name || '').trim();
+  if (n) {
+    const parts = n.split(/\s+/);
+    if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+    return n.slice(0, 2).toUpperCase();
+  }
+  if (email) return email.slice(0, 2).toUpperCase();
+  return 'U';
+}
+
 export default function HomeScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
@@ -46,6 +57,23 @@ export default function HomeScreen() {
   const timerRef = useRef(null);
 
   const tips = [t.home?.tip1, t.home?.tip2, t.home?.tip3].filter(Boolean);
+
+  const displayName =
+    user?.user_metadata?.full_name ||
+    user?.name ||
+    user?.email?.split('@')[0] ||
+    'there';
+
+  const avatarUrl =
+    user?.user_metadata?.avatar_url ||
+    user?.user_metadata?.picture ||
+    user?.avatar_url ||
+    null;
+
+  const initials = getInitials(
+    user?.user_metadata?.full_name || user?.name,
+    user?.email,
+  );
 
   useEffect(() => {
     timerRef.current = setInterval(() => {
@@ -98,10 +126,7 @@ export default function HomeScreen() {
           <View style={{ flex: 1, paddingRight: 12 }}>
             <Text style={styles.greeting}>{t.home?.greeting || 'Hello'},</Text>
             <Text style={styles.userName} numberOfLines={1}>
-              {user?.user_metadata?.full_name ||
-                user?.name ||
-                user?.email?.split('@')[0] ||
-                'there'}
+              {displayName}
             </Text>
           </View>
           <View style={styles.headerRight}>
@@ -114,7 +139,15 @@ export default function HomeScreen() {
               style={styles.avatarBtn}
               onPress={() => navigation.navigate('Profile')}
             >
-              <User2 size={20} color={colors.primary} />
+              {avatarUrl ? (
+                <Image
+                  source={{ uri: avatarUrl }}
+                  style={styles.avatarImage}
+                  resizeMode="cover"
+                />
+              ) : (
+                <Text style={styles.avatarInitials}>{initials}</Text>
+              )}
             </Pressable>
           </View>
         </View>
@@ -165,38 +198,19 @@ export default function HomeScreen() {
             </View>
           </View>
 
-          {/* Scan buttons - now language aware */}
-          <View style={styles.scanRow}>
-            <Pressable
-              style={[styles.scanCard, styles.scanMedicine]}
-              onPress={() =>
-                navigation.navigate('Camera', { scanType: 'medicine' })
-              }
-            >
-              <Pill size={22} color="#fff" />
-               <Text style={styles.scanCardTitle}>
-                 {t.home?.medicineBtn || 'Medicine'}
-               </Text>
-               <Text style={styles.scanCardSub}>
-                 {t.home?.medicineSub || 'Pack / strip'}
-               </Text>
-            </Pressable>
-
-            <Pressable
-              style={[styles.scanCard, styles.scanReport]}
-              onPress={() =>
-                navigation.navigate('Camera', { scanType: 'report' })
-              }
-            >
-              <FileText size={22} color="#fff" />
-              <Text style={styles.scanCardTitle}>
-                {t.home?.reportBtn || 'Report'}
-              </Text>
-              <Text style={styles.scanCardSub}>
-                {t.home?.reportSub || 'Lab / X-Ray'}
-              </Text>
-            </Pressable>
-          </View>
+          {/* Single Scan button */}
+          <Pressable
+            style={styles.scanMainBtn}
+            onPress={() => navigation.navigate('Camera')}
+          >
+            <ScanLine size={22} color="#fff" />
+            <Text style={styles.scanMainTitle}>
+              {t.home?.scanBtn || 'Scan Now'}
+            </Text>
+            <Text style={styles.scanMainSub}>
+              {t.home?.scanSub || 'Medicine, report, X-ray or prescription'}
+            </Text>
+          </Pressable>
 
           {/* Quick Tips */}
           <Text style={styles.sectionTitle}>
@@ -246,6 +260,17 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+  },
+  avatarInitials: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.primary,
   },
   cardWrapper: { flex: 1, marginTop: -32 },
   scrollContent: { paddingBottom: 32 },
@@ -285,31 +310,26 @@ const styles = StyleSheet.create({
     width: 18,
     backgroundColor: colors.primary,
   },
-  scanRow: {
-    flexDirection: 'row',
-    gap: 12,
+  scanMainBtn: {
     marginTop: 16,
     marginBottom: 4,
-  },
-  scanCard: {
-    flex: 1,
-    borderRadius: 18,
-    paddingVertical: 18,
-    paddingHorizontal: 14,
+    backgroundColor: colors.primary,
+    borderRadius: 20,
+    paddingVertical: 20,
+    paddingHorizontal: 18,
     alignItems: 'center',
     gap: 4,
   },
-  scanMedicine: { backgroundColor: '#0E9F8E' },
-  scanReport: { backgroundColor: '#3B82F6' },
-  scanCardTitle: {
+  scanMainTitle: {
     color: '#fff',
-    fontSize: 15,
+    fontSize: 17,
     fontWeight: '700',
     marginTop: 6,
   },
-  scanCardSub: {
-    color: 'rgba(255,255,255,0.85)',
-    fontSize: 12,
+  scanMainSub: {
+    color: 'rgba(255,255,255,0.9)',
+    fontSize: 13,
+    textAlign: 'center',
   },
   sectionTitle: {
     color: colors.textDark || '#1F2937',

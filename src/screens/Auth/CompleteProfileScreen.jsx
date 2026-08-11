@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { User, Calendar, Phone } from 'lucide-react-native';
+import { User, Calendar, Phone, Check } from 'lucide-react-native';
 import { useAuth } from '@/context/AuthContext';
 import { colors } from '@/theme/colors';
 import { supabase } from '@/lib/supabase';
@@ -26,6 +26,7 @@ export default function CompleteProfileScreen() {
   const [name, setName] = useState('');
   const [age, setAge] = useState('');
   const [phone, setPhone] = useState('');
+  const [agreed, setAgreed] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const [modal, setModal] = useState({
@@ -59,45 +60,53 @@ export default function CompleteProfileScreen() {
       showModal({ type: 'error', title: 'Error', message: 'Please enter a valid phone number' });
       return;
     }
+    if (!agreed) {
+      showModal({
+        type: 'error',
+        title: 'Disclaimer',
+        message: 'Please accept the disclaimer to continue',
+      });
+      return;
+    }
 
     try {
       setLoading(true);
 
-      const { data, error } = await supabase.auth.updateUser({
-        data: {
-          full_name: name.trim(),
+      if (user?.id && !String(user.id).startsWith('local-')) {
+        const { data, error } = await supabase.auth.updateUser({
+          data: {
+            full_name: name.trim(),
+            age: Number(age),
+            phone: phone.trim(),
+            profileComplete: true,
+            disclaimerAccepted: true,
+          },
+        });
+        if (error) throw error;
+
+        signInStub({
+          ...data?.user,
+          name: name.trim(),
           age: Number(age),
           phone: phone.trim(),
           profileComplete: true,
-        },
-      });
-
-      if (error) throw error;
-
-      if (user?.id && !String(user.id).startsWith('local-')) {
-        await supabase.from('profiles').upsert({
-          id: user.id,
-          full_name: name.trim(),
+          user_metadata: {
+            ...(data?.user?.user_metadata || {}),
+            full_name: name.trim(),
+            age: Number(age),
+            phone: phone.trim(),
+            profileComplete: true,
+            disclaimerAccepted: true,
+          },
+        });
+      } else {
+        signInStub({
+          name: name.trim(),
           age: Number(age),
           phone: phone.trim(),
-          updated_at: new Date().toISOString(),
+          profileComplete: true,
         });
       }
-
-      signInStub({
-        ...data?.user,
-        name: name.trim(),
-        age: Number(age),
-        phone: phone.trim(),
-        profileComplete: true,
-        user_metadata: {
-          ...(data?.user?.user_metadata || {}),
-          full_name: name.trim(),
-          age: Number(age),
-          phone: phone.trim(),
-          profileComplete: true,
-        },
-      });
     } catch (error) {
       showModal({
         type: 'error',
@@ -126,7 +135,6 @@ export default function CompleteProfileScreen() {
         onConfirm={hideModal}
         onCancel={hideModal}
       />
-
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={{ flex: 1 }}
@@ -192,10 +200,29 @@ export default function CompleteProfileScreen() {
               />
             </View>
 
+            {/* Disclaimer checkbox */}
             <Pressable
-              style={[styles.saveBtn, loading && { opacity: 0.7 }]}
+              style={styles.disclaimerRow}
+              onPress={() => setAgreed((v) => !v)}
+            >
+              <View style={[styles.checkbox, agreed && styles.checkboxChecked]}>
+                {agreed ? <Check size={14} color="#fff" /> : null}
+              </View>
+              <Text style={styles.disclaimerText}>
+                I understand that MedScan only gives simple explanations of
+                medicines and reports. It is <Text style={styles.bold}>not a diagnosis</Text> and
+                does not replace a doctor. Always consult a qualified healthcare
+                professional.
+              </Text>
+            </Pressable>
+
+            <Pressable
+              style={[
+                styles.saveBtn,
+                (!agreed || loading) && { opacity: 0.55 },
+              ]}
               onPress={handleSave}
-              disabled={loading}
+              disabled={loading || !agreed}
             >
               {loading ? (
                 <ActivityIndicator color="#fff" />
@@ -211,9 +238,7 @@ export default function CompleteProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  gradient: {
-    flex: 1,
-  },
+  gradient: { flex: 1 },
   scroll: {
     flexGrow: 1,
     paddingHorizontal: 24,
@@ -266,17 +291,50 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     height: 52,
   },
-  inputIcon: {
-    marginRight: 12,
-  },
+  inputIcon: { marginRight: 12 },
   input: {
     flex: 1,
     fontSize: 15,
     color: colors.textDark,
     paddingVertical: 0,
   },
+  disclaimerRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    marginTop: 22,
+    padding: 12,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+  },
+  checkboxChecked: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  disclaimerText: {
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 18,
+    color: colors.textMuted,
+  },
+  bold: {
+    fontWeight: '700',
+    color: colors.textDark,
+  },
   saveBtn: {
-    marginTop: 28,
+    marginTop: 22,
     backgroundColor: colors.primaryDark,
     height: 54,
     borderRadius: 28,
